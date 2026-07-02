@@ -145,7 +145,7 @@ def _resumo_texto(f: dict) -> str:
         f"Fundo: {f['fundo']['nome']} ({f['fundo']['classe']}). "
         f"Período: {f['fundo']['periodo']}. Benchmark: {f['fundo']['benchmark']}.\n"
         f"Retorno da cota: {r['retorno_cota']:.2f}%; benchmark: {r['retorno_bench']:.2f}%; "
-        f"excesso: {r['excesso_pp']:+.2f}pp ({r['pct_cdi']:.0f}% do CDI). "
+        f"excesso: {r['excesso_pp']:+.2f}pp ({r['pct_cdi']:.0f}% do {f['fundo']['benchmark']}). "
         f"Beta: {r['beta']}; Alpha: {r['alpha_pp']:+.2f}pp.\n"
         f"Contribuição por estratégia: {estr}."
     )
@@ -170,7 +170,11 @@ def health():
 @app.post("/narrativa")
 def narrativa(req: NarrativaReq):
     t0 = time.perf_counter()
-    f = STATE["fundos"].get(req.fundo) or next(iter(STATE["fundos"].values()))
+    fundos = STATE.get("fundos") or {}
+    f = fundos.get(req.fundo) or (next(iter(fundos.values())) if fundos else None)
+    if f is None:
+        return {"texto": "", "citacoes": [], "backend": req.backend,
+                "latency_ms": 0, "erro": "nenhum fundo carregado"}
     idx = STATE["index"]
     retr = idx.search("atribuição contribuição estratégia alpha beta carrego benchmark", k=3)
     regras = "\n".join(f"[{c.source}] {c.text[:280]}" for c, _ in retr)
@@ -185,7 +189,7 @@ def narrativa(req: NarrativaReq):
     texto = llm.generate(prompt, temperature=0.1, max_tokens=220).strip()
     lat = int((time.perf_counter() - t0) * 1000)
     fontes = [c.source for c, _ in retr]
-    audit.registrar(rota="/narrativa", fundo=req.fundo, pergunta="(narrativa do período)",
+    audit.registrar(rota="/narrativa", fundo=f["fundo"]["codigo"], pergunta="(narrativa do período)",
                     backend=req.backend, latency_ms=lat, fontes=fontes, bloqueados=[],
                     resposta=texto)
     return {
