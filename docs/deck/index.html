@@ -65,6 +65,17 @@
   .progress{position:fixed;top:0;left:0;height:3px;background:var(--gold);transition:width .35s ease;z-index:10}
   .foot{position:fixed;bottom:2rem;left:2.5rem;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
   svg.mark{width:44px;height:44px}
+
+  @page{size:1600px 900px;margin:0}
+  @media print{
+    body{overflow:visible;background:var(--bg)}
+    .deck{height:auto;width:auto}
+    .slide{display:flex!important;opacity:1!important;position:relative!important;
+           inset:auto!important;width:1600px;height:900px;page-break-after:always;padding:70px 110px}
+    .slide:last-of-type{page-break-after:auto}
+    .nav,.progress{display:none!important}
+    .foot{position:absolute}
+  }
 </style>
 </head>
 <body>
@@ -227,7 +238,7 @@
 
 <div class="foot">Prisma · prova de conceito · dados fictícios</div>
 <div class="nav">
-  <span id="counter">1 / 10</span>
+  <span id="counter"></span>
   <button onclick="go(-1)" aria-label="anterior">‹</button>
   <button onclick="go(1)" aria-label="próximo">›</button>
 </div>
