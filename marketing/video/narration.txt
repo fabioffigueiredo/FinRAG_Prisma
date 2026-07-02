@@ -1,0 +1,7 @@
+A planilha da atribuição fica pronta. O texto, não.
+Então eu construí o Prisma: ele explica de onde veio o retorno do fundo, citando a fonte de cada frase.
+As notícias entram com sentimento, por estratégia. Pergunte por que o varejo pesou, e a resposta cita a notícia.
+Peça uma recomendação de compra, e ele recusa. O escopo é explicar, não recomendar.
+Cada consulta deixa trilha: fontes, motor, bloqueios. Auditoria de verdade.
+E roda cem por cento local, num notebook. Nenhum dado sai da máquina.
+Prisma. Código aberto, demo reproduzível. Link no primeiro comentário.

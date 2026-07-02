@@ -1,0 +1,5 @@
+capture/raw/
+capture/videos-raw/
+build/tmp/
+out/
+node_modules/
