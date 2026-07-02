@@ -23,7 +23,8 @@ PRISMA = HERE.parents[2]          # .../PD1/prisma
 PD1 = HERE.parents[3]             # .../PD1
 FINRAG_SRC = PD1 / "Finrag" / "src"
 CORPUS_DIR = PRISMA / "data" / "corpus"
-SEED = PRISMA / "data" / "seed" / "fundo_alfa.json"
+SEED_DIR = PRISMA / "data" / "seed"
+NOTICIAS_PATH = SEED_DIR / "noticias_alfa_classificadas.json"
 
 sys.path.insert(0, str(FINRAG_SRC))
 
@@ -34,6 +35,9 @@ from finrag.rag import build_augmented_prompt            # noqa: E402
 
 from llm import get_backend, ollama_disponivel, OllamaClient  # noqa: E402
 from embed import get_embed_fn                                # noqa: E402
+from escopo import pede_recomendacao, INSTRUCAO_ESCOPO, RESPOSTA_ESCOPO  # noqa: E402
+import audit                                                             # noqa: E402
+from radar import carregar_noticias, agregar                             # noqa: E402
 
 app = FastAPI(title="Prisma API", version="0.1.0")
 app.add_middleware(
@@ -43,7 +47,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STATE: dict = {"index": None, "embed": "?", "fundo": None}
+STATE: dict = {"index": None, "embed": "?", "fundos": None, "noticias": None}
+
+NOMES_FUNDOS = {"alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12"}
+
+
+def e_comparativa(pergunta: str) -> list[str]:
+    """Retorna os códigos de fundos a incluir no contexto de uma pergunta
+    comparativa; lista vazia = usar apenas o fundo ativo."""
+    q = (pergunta or "").lower()
+    citados = [cod for nome, cod in NOMES_FUNDOS.items() if nome in q]
+    if "compar" in q and len(citados) < 2:
+        return list(NOMES_FUNDOS.values())
+    return citados if len(citados) >= 2 else []
 
 
 def _corpus_docs():
@@ -53,6 +69,14 @@ def _corpus_docs():
     for md in sorted(CORPUS_DIR.glob("*.md")):
         from finrag.corpus import Document
         docs.append(Document(id=md.stem, text=md.read_text(encoding="utf-8"), source=md.name))
+    from finrag.corpus import Document
+    for n in carregar_noticias(NOTICIAS_PATH):
+        docs.append(Document(
+            id=f"noticia_{n['id']}",
+            text=(f"Notícia ({n['data']}, estratégia {n['estrategia']}, "
+                  f"sentimento {n['sentimento']}): {n['titulo']}. {n['corpo']}"),
+            source=f"noticia:{n['id']}",
+        ))
     return docs
 
 
@@ -63,7 +87,11 @@ def _startup() -> None:
     idx = SemanticIndex(embed_fn=embed_fn) if embed_fn else SemanticIndex()
     idx.build(chunk_corpus(_corpus_docs()))
     STATE["index"] = idx
-    STATE["fundo"] = json.loads(SEED.read_text(encoding="utf-8"))
+    STATE["fundos"] = {}
+    for fj in sorted(SEED_DIR.glob("fundo_*.json")):
+        d = json.loads(fj.read_text(encoding="utf-8"))
+        STATE["fundos"][d["fundo"]["codigo"]] = d
+    STATE["noticias"] = carregar_noticias(NOTICIAS_PATH)
     if ollama_disponivel():
         OllamaClient().warmup()
 
@@ -76,6 +104,7 @@ class NarrativaReq(BaseModel):
 class PerguntaReq(BaseModel):
     pergunta: str
     backend: str = "ollama"
+    fundo: str = "ALFA-33"
 
 
 class IngestReq(BaseModel):
@@ -122,6 +151,12 @@ def _resumo_texto(f: dict) -> str:
     )
 
 
+def _fund_chunk(f: dict):
+    from finrag.corpus import Chunk
+    cod = f["fundo"]["codigo"]
+    return Chunk(doc_id=f"dados_{cod}", chunk_id=0, text=_resumo_texto(f), source=f"dados:{cod}")
+
+
 @app.get("/health")
 def health():
     return {
@@ -135,9 +170,8 @@ def health():
 @app.post("/narrativa")
 def narrativa(req: NarrativaReq):
     t0 = time.perf_counter()
-    f = STATE["fundo"]
+    f = STATE["fundos"].get(req.fundo) or next(iter(STATE["fundos"].values()))
     idx = STATE["index"]
-    # RAG: recupera regras relevantes para fundamentar a leitura
     retr = idx.search("atribuição contribuição estratégia alpha beta carrego benchmark", k=3)
     regras = "\n".join(f"[{c.source}] {c.text[:280]}" for c, _ in retr)
     prompt = (
@@ -145,38 +179,60 @@ def narrativa(req: NarrativaReq):
         "em português, explicando o resultado do fundo no período. Baseie-se SOMENTE nos "
         "números e nas regras abaixo; não invente dados. Foque em de onde veio o retorno.\n\n"
         f"NÚMEROS DO FUNDO:\n{_resumo_texto(f)}\n\n"
-        f"REGRAS DE ATRIBUIÇÃO (contexto):\n{regras}\n\nComentário:"
+        f"REGRAS DE ATRIBUIÇÃO (contexto):\n{regras}" + INSTRUCAO_ESCOPO + "\n\nComentário:"
     )
     llm = get_backend(req.backend)
     texto = llm.generate(prompt, temperature=0.1, max_tokens=220).strip()
+    lat = int((time.perf_counter() - t0) * 1000)
+    fontes = [c.source for c, _ in retr]
+    audit.registrar(rota="/narrativa", fundo=req.fundo, pergunta="(narrativa do período)",
+                    backend=req.backend, latency_ms=lat, fontes=fontes, bloqueados=[],
+                    resposta=texto)
     return {
         "texto": texto,
         "citacoes": [{"fonte": c.source, "trecho": c.text[:160].strip(), "score": round(float(s), 3)} for c, s in retr],
         "backend": req.backend,
-        "latency_ms": int((time.perf_counter() - t0) * 1000),
+        "latency_ms": lat,
     }
 
 
 @app.post("/perguntar")
 def perguntar(req: PerguntaReq):
     t0 = time.perf_counter()
+    if pede_recomendacao(req.pergunta):
+        audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
+                        backend=req.backend, latency_ms=0, fontes=[], bloqueados=[],
+                        resposta=RESPOSTA_ESCOPO, extra={"escopo": True})
+        return {"resposta": RESPOSTA_ESCOPO, "citacoes": [], "bloqueados": [],
+                "backend": req.backend, "latency_ms": 0, "escopo": True}
+
     idx = STATE["index"]
+    codigos = e_comparativa(req.pergunta) or [req.fundo]
+    fund_chunks = [_fund_chunk(STATE["fundos"][c]) for c in codigos if c in STATE["fundos"]]
+
     retr = idx.search(req.pergunta, k=4)
     scores = {id(c): s for c, s in retr}
-    chunks = [c for c, _ in retr]
-    safe, blocked = sanitize_chunks(chunks)
-    prompt = build_augmented_prompt(req.pergunta, safe)
+    safe, blocked = sanitize_chunks([c for c, _ in retr])
+    contexto = fund_chunks + safe
+    prompt = build_augmented_prompt(req.pergunta, contexto) + INSTRUCAO_ESCOPO
     llm = get_backend(req.backend)
     resposta = llm.generate(prompt, temperature=0.1, max_tokens=380).strip()
+    lat = int((time.perf_counter() - t0) * 1000)
+    citacoes = [
+        {"fonte": c.source, "trecho": c.text[:160].strip(),
+         "score": round(float(scores.get(id(c), 0)), 3)}
+        for c in contexto
+    ]
+    audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
+                    backend=req.backend, latency_ms=lat,
+                    fontes=[c["fonte"] for c in citacoes],
+                    bloqueados=[c.source for c in blocked], resposta=resposta)
     return {
         "resposta": resposta,
-        "citacoes": [
-            {"fonte": c.source, "trecho": c.text[:160].strip(), "score": round(float(scores.get(id(c), 0)), 3)}
-            for c in safe
-        ],
+        "citacoes": citacoes,
         "bloqueados": [{"fonte": c.source, "motivo": "prompt injection detectado pelo guardrail"} for c in blocked],
         "backend": req.backend,
-        "latency_ms": int((time.perf_counter() - t0) * 1000),
+        "latency_ms": lat,
     }
 
 
@@ -201,3 +257,16 @@ def ingerir(req: IngestReq):
         "estrategias": estrategias,
         "n_estrategias": len(estrategias),
     }
+
+
+@app.get("/radar")
+def radar_endpoint():
+    noticias = STATE.get("noticias") or []
+    if not noticias:
+        return {"ok": False, "noticias": [], "agregado": {}}
+    return {"ok": True, "noticias": noticias, "agregado": agregar(noticias)}
+
+
+@app.get("/auditoria")
+def auditoria(limit: int = 50):
+    return {"ok": True, "consultas": audit.ler(limit=limit)}
