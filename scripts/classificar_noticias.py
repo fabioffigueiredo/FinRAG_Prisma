@@ -10,7 +10,8 @@ o campo final `sentimento` usa: SVM por padrão; LLM quando `--llm` for passado
 (mantendo `sentimento_svm` como comparativo).
 
 Uso:
-    cd prisma && ../.venv/bin/python scripts/classificar_noticias.py [--llm]
+    cd prisma && .venv/bin/python scripts/classificar_noticias.py [--llm]
+    (dependências extras do pipeline: pip install -r scripts/finnlp_pipeline/requirements-finnlp.txt)
 """
 from __future__ import annotations
 
@@ -20,8 +21,8 @@ import sys
 from pathlib import Path
 
 PRISMA = Path(__file__).resolve().parents[1]
-PD1 = PRISMA.parent
-sys.path.insert(0, str(PD1 / "src"))
+FINNLP_DIR = PRISMA / "scripts" / "finnlp_pipeline"
+sys.path.insert(0, str(FINNLP_DIR))
 
 SEED = PRISMA / "data" / "seed"
 ENTRADA = SEED / "noticias_alfa.json"
@@ -33,12 +34,16 @@ MAPA = {"positive": "positivo", "negative": "negativo", "neutral": "neutro",
 
 
 def treinar_svm_finnlp():
-    """Treina com as funções do FinNLP (PD1/src). Aborta com mensagem clara se falhar."""
+    """Treina com as funções do FinNLP (vendorizadas em scripts/finnlp_pipeline).
+    Aborta com mensagem clara se as dependências extras não estiverem instaladas."""
     try:
-        from coleta_preprocessamento import load_phrasebank          # AJUSTAR se assinatura divergir
-        from modelagem_vetorizacao import build_tfidf, train_svm     # AJUSTAR se assinatura divergir
+        from coleta_preprocessamento import load_phrasebank
+        from modelagem_vetorizacao import build_tfidf, train_svm
     except Exception as e:  # noqa: BLE001
-        sys.exit(f"ERRO: não consegui importar o pipeline do FinNLP em {PD1/'src'}: {e}")
+        sys.exit(
+            f"ERRO: não consegui importar o pipeline do FinNLP em {FINNLP_DIR}: {e}\n"
+            "Instale as dependências extras: pip install -r scripts/finnlp_pipeline/requirements-finnlp.txt"
+        )
     df = load_phrasebank()                                           # AJUSTAR se assinatura divergir
     textos = df["text"].tolist() if hasattr(df, "columns") else [d["text"] for d in df]
     labels = df["label"].tolist() if hasattr(df, "columns") else [d["label"] for d in df]

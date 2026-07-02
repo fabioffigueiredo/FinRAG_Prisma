@@ -1,0 +1,14 @@
+# Prisma API — runtime (Python 3.12)
+fastapi==0.115.6
+uvicorn==0.34.0
+requests==2.32.3
+pydantic==2.13.4
+numpy==1.26.4
+faiss-cpu==1.8.0
+sentence-transformers==3.0.1   # fallback de embeddings quando o Ollama não está disponível
+rank-bm25==0.2.2
+groq==1.5.0                    # backend "Nuvem" (opcional; requer GROQ_API_KEY)
+pytest
+
+# Dependências extras APENAS para reexecutar a classificação offline de notícias:
+#   pip install -r scripts/finnlp_pipeline/requirements-finnlp.txt
