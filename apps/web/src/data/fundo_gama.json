@@ -1,0 +1,402 @@
+{
+  "fundo": {
+    "nome": "Gama Renda Fixa CP",
+    "codigo": "GAMA-12",
+    "cnpj": "00.000.000/0003-00 (fictício)",
+    "benchmark": "CDI",
+    "periodo": "2º trimestre 2026 (abr–jun)",
+    "classe": "Renda Fixa Crédito Privado"
+  },
+  "resumo": {
+    "retorno_cota": 3.45,
+    "retorno_bench": 3.1,
+    "excesso_pp": 0.35,
+    "pct_cdi": 111.3,
+    "beta": 0.98,
+    "alpha_pp": 0.35,
+    "vol_anual": 0.6,
+    "patrimonio_mm": 2410.8,
+    "num_cotistas": 15230
+  },
+  "estrategias": [
+    {
+      "nome": "Caixa e Over",
+      "contribuicao_pp": 2.3,
+      "peso_medio": 40.0,
+      "cor": "neutral"
+    },
+    {
+      "nome": "Crédito Privado",
+      "contribuicao_pp": 0.85,
+      "peso_medio": 45.0,
+      "cor": "gold"
+    },
+    {
+      "nome": "Juros Brasil",
+      "contribuicao_pp": 0.42,
+      "peso_medio": 15.0,
+      "cor": "blue"
+    },
+    {
+      "nome": "Custos e Despesas",
+      "contribuicao_pp": -0.12,
+      "peso_medio": 0.0,
+      "cor": "red"
+    }
+  ],
+  "ativos": [
+    {
+      "estrategia": "Caixa e Over",
+      "ativo": "Operações Compromissadas",
+      "contribuicao_pp": 2.3,
+      "peso_medio": 40.0
+    },
+    {
+      "estrategia": "Crédito Privado",
+      "ativo": "CDB AAA 2027",
+      "contribuicao_pp": 0.45,
+      "peso_medio": 25.0
+    },
+    {
+      "estrategia": "Crédito Privado",
+      "ativo": "Debênture Saneamento 2028",
+      "contribuicao_pp": 0.28,
+      "peso_medio": 12.0
+    },
+    {
+      "estrategia": "Crédito Privado",
+      "ativo": "LF Banco Grande Porte",
+      "contribuicao_pp": 0.12,
+      "peso_medio": 8.0
+    },
+    {
+      "estrategia": "Juros Brasil",
+      "ativo": "LFT 2028",
+      "contribuicao_pp": 0.42,
+      "peso_medio": 15.0
+    }
+  ],
+  "serie_diaria": [
+    {
+      "data": "2026-04-01",
+      "cota": 0.0,
+      "bench": 0.0
+    },
+    {
+      "data": "2026-04-02",
+      "cota": 0.0551,
+      "bench": 0.0423
+    },
+    {
+      "data": "2026-04-03",
+      "cota": 0.1175,
+      "bench": 0.0974
+    },
+    {
+      "data": "2026-04-06",
+      "cota": 0.1803,
+      "bench": 0.1525
+    },
+    {
+      "data": "2026-04-07",
+      "cota": 0.2221,
+      "bench": 0.2126
+    },
+    {
+      "data": "2026-04-08",
+      "cota": 0.2586,
+      "bench": 0.2527
+    },
+    {
+      "data": "2026-04-09",
+      "cota": 0.3098,
+      "bench": 0.2942
+    },
+    {
+      "data": "2026-04-10",
+      "cota": 0.3568,
+      "bench": 0.3331
+    },
+    {
+      "data": "2026-04-13",
+      "cota": 0.4254,
+      "bench": 0.3745
+    },
+    {
+      "data": "2026-04-14",
+      "cota": 0.4891,
+      "bench": 0.431
+    },
+    {
+      "data": "2026-04-15",
+      "cota": 0.5493,
+      "bench": 0.4695
+    },
+    {
+      "data": "2026-04-16",
+      "cota": 0.6077,
+      "bench": 0.52
+    },
+    {
+      "data": "2026-04-17",
+      "cota": 0.6703,
+      "bench": 0.561
+    },
+    {
+      "data": "2026-04-20",
+      "cota": 0.7122,
+      "bench": 0.6044
+    },
+    {
+      "data": "2026-04-21",
+      "cota": 0.7659,
+      "bench": 0.6519
+    },
+    {
+      "data": "2026-04-22",
+      "cota": 0.8085,
+      "bench": 0.7116
+    },
+    {
+      "data": "2026-04-23",
+      "cota": 0.8809,
+      "bench": 0.7644
+    },
+    {
+      "data": "2026-04-24",
+      "cota": 0.9193,
+      "bench": 0.7994
+    },
+    {
+      "data": "2026-04-27",
+      "cota": 0.9882,
+      "bench": 0.8422
+    },
+    {
+      "data": "2026-04-28",
+      "cota": 1.0273,
+      "bench": 0.8811
+    },
+    {
+      "data": "2026-04-29",
+      "cota": 1.0909,
+      "bench": 0.9418
+    },
+    {
+      "data": "2026-04-30",
+      "cota": 1.1405,
+      "bench": 1.0007
+    },
+    {
+      "data": "2026-05-01",
+      "cota": 1.1928,
+      "bench": 1.0594
+    },
+    {
+      "data": "2026-05-04",
+      "cota": 1.2626,
+      "bench": 1.1188
+    },
+    {
+      "data": "2026-05-05",
+      "cota": 1.2995,
+      "bench": 1.1757
+    },
+    {
+      "data": "2026-05-06",
+      "cota": 1.338,
+      "bench": 1.2387
+    },
+    {
+      "data": "2026-05-07",
+      "cota": 1.4107,
+      "bench": 1.2971
+    },
+    {
+      "data": "2026-05-08",
+      "cota": 1.4672,
+      "bench": 1.3393
+    },
+    {
+      "data": "2026-05-11",
+      "cota": 1.507,
+      "bench": 1.3994
+    },
+    {
+      "data": "2026-05-12",
+      "cota": 1.5826,
+      "bench": 1.4486
+    },
+    {
+      "data": "2026-05-13",
+      "cota": 1.6565,
+      "bench": 1.5058
+    },
+    {
+      "data": "2026-05-14",
+      "cota": 1.6972,
+      "bench": 1.5573
+    },
+    {
+      "data": "2026-05-15",
+      "cota": 1.7502,
+      "bench": 1.6047
+    },
+    {
+      "data": "2026-05-18",
+      "cota": 1.7917,
+      "bench": 1.6502
+    },
+    {
+      "data": "2026-05-19",
+      "cota": 1.8403,
+      "bench": 1.6976
+    },
+    {
+      "data": "2026-05-20",
+      "cota": 1.9013,
+      "bench": 1.7416
+    },
+    {
+      "data": "2026-05-21",
+      "cota": 1.944,
+      "bench": 1.7797
+    },
+    {
+      "data": "2026-05-22",
+      "cota": 2.0079,
+      "bench": 1.8388
+    },
+    {
+      "data": "2026-05-25",
+      "cota": 2.0461,
+      "bench": 1.8973
+    },
+    {
+      "data": "2026-05-26",
+      "cota": 2.0891,
+      "bench": 1.9615
+    },
+    {
+      "data": "2026-05-27",
+      "cota": 2.1578,
+      "bench": 2.0168
+    },
+    {
+      "data": "2026-05-28",
+      "cota": 2.21,
+      "bench": 2.0679
+    },
+    {
+      "data": "2026-05-29",
+      "cota": 2.2628,
+      "bench": 2.1249
+    },
+    {
+      "data": "2026-06-01",
+      "cota": 2.3228,
+      "bench": 2.1635
+    },
+    {
+      "data": "2026-06-02",
+      "cota": 2.378,
+      "bench": 2.2184
+    },
+    {
+      "data": "2026-06-03",
+      "cota": 2.4295,
+      "bench": 2.2663
+    },
+    {
+      "data": "2026-06-04",
+      "cota": 2.4668,
+      "bench": 2.3061
+    },
+    {
+      "data": "2026-06-05",
+      "cota": 2.532,
+      "bench": 2.3468
+    },
+    {
+      "data": "2026-06-08",
+      "cota": 2.6068,
+      "bench": 2.397
+    },
+    {
+      "data": "2026-06-09",
+      "cota": 2.6819,
+      "bench": 2.4392
+    },
+    {
+      "data": "2026-06-10",
+      "cota": 2.7446,
+      "bench": 2.4875
+    },
+    {
+      "data": "2026-06-11",
+      "cota": 2.795,
+      "bench": 2.5402
+    },
+    {
+      "data": "2026-06-12",
+      "cota": 2.8456,
+      "bench": 2.5867
+    },
+    {
+      "data": "2026-06-15",
+      "cota": 2.9093,
+      "bench": 2.6251
+    },
+    {
+      "data": "2026-06-16",
+      "cota": 2.9724,
+      "bench": 2.6744
+    },
+    {
+      "data": "2026-06-17",
+      "cota": 3.0131,
+      "bench": 2.716
+    },
+    {
+      "data": "2026-06-18",
+      "cota": 3.0586,
+      "bench": 2.7577
+    },
+    {
+      "data": "2026-06-19",
+      "cota": 3.1092,
+      "bench": 2.7981
+    },
+    {
+      "data": "2026-06-22",
+      "cota": 3.1658,
+      "bench": 2.8436
+    },
+    {
+      "data": "2026-06-23",
+      "cota": 3.2343,
+      "bench": 2.8804
+    },
+    {
+      "data": "2026-06-24",
+      "cota": 3.2904,
+      "bench": 2.9345
+    },
+    {
+      "data": "2026-06-25",
+      "cota": 3.3277,
+      "bench": 2.9976
+    },
+    {
+      "data": "2026-06-26",
+      "cota": 3.3967,
+      "bench": 3.0439
+    },
+    {
+      "data": "2026-06-29",
+      "cota": 3.45,
+      "bench": 3.1
+    }
+  ],
+  "fics": []
+}
