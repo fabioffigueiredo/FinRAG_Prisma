@@ -125,3 +125,29 @@ export function perguntar(pergunta: string, backend: Backend, fundo?: string): P
     },
   );
 }
+
+export type Noticia = {
+  id: string;
+  titulo: string;
+  corpo: string;
+  estrategia: string;
+  data: string;
+  sentimento: "positivo" | "negativo" | "neutro";
+  confianca: number;
+};
+
+export type RadarResp = {
+  ok: boolean;
+  noticias: Noticia[];
+  agregado: Record<string, { pos: number; neg: number; neu: number; total: number; liquido: number }>;
+};
+
+export async function getRadar(): Promise<RadarResp> {
+  try {
+    const res = await fetch(`${BASE}/radar`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as RadarResp;
+  } catch {
+    return { ok: false, noticias: [], agregado: {} };
+  }
+}
