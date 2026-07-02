@@ -132,13 +132,48 @@ def clip_atribuicao(browser):
     _save(ctx, page, "atribuicao")
 
 
+def clip_perguntas(browser):
+    """Simulação: o gestor digita perguntas reais e o sistema responde."""
+    ctx = _ctx(browser, "perguntas")
+    page = ctx.new_page()
+    page.goto(BASE + "/copiloto", wait_until="networkidle")
+    page.wait_for_timeout(1200)
+    _demo_motor(page)
+    caixa = page.locator("textarea")
+
+    # pergunta 1 — digitada tecla a tecla, como um gestor faria
+    caixa.click()
+    caixa.press_sequentially("De onde veio o retorno do fundo no período?", delay=45)
+    page.wait_for_timeout(500)
+    page.get_by_role("button", name="Enviar").click()
+    page.wait_for_timeout(3400)
+
+    # pergunta 2 — comparativa
+    caixa.click()
+    caixa.press_sequentially("Compare o Alfa e o Beta no trimestre", delay=45)
+    page.wait_for_timeout(500)
+    page.get_by_role("button", name="Enviar").click()
+    page.wait_for_timeout(3600)
+    page.mouse.wheel(0, 400)
+    page.wait_for_timeout(2200)
+    _save(ctx, page, "perguntas")
+
+
+TODAS = {
+    "cockpit": clip_cockpit, "radar": clip_radar, "copiloto": clip_copiloto,
+    "guardrail": clip_guardrail, "auditoria": clip_auditoria,
+    "atribuicao": clip_atribuicao, "perguntas": clip_perguntas,
+}
+
+
 def main():
+    import sys
+    alvos = sys.argv[1:] or list(TODAS)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        for fn in (clip_cockpit, clip_radar, clip_copiloto,
-                   clip_guardrail, clip_auditoria, clip_atribuicao):
+        for nome in alvos:
             t0 = time.time()
-            fn(browser)
+            TODAS[nome](browser)
             print(f"  ({time.time()-t0:.1f}s)")
         browser.close()
     print("Capturas concluídas em", RAW)

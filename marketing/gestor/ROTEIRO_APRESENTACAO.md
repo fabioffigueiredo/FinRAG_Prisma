@@ -6,13 +6,23 @@ Ollama aquecido (faça 1 pergunta no copiloto 10 min antes), motor em "Local".
 
 ---
 
-## 0–2 min · O problema (slides 1–2)
+## 0–2 min · O problema, em horas (slides 1–2)
 
-> "Todo fechamento a gente vive a mesma cena: a atribuição entrega números
-> impecáveis — e aí alguém senta e passa horas transformando aquilo em texto
-> para o comitê e para o cliente. Sem padrão, sem trilha, e não escala."
+**Gancho de abertura — comece pela conta, não pela tecnologia:**
 
-Pausa. Deixe a dor assentar. Não mencione IA ainda.
+> "Antes de mostrar qualquer tela, uma conta rápida. Quantos fundos fecham
+> comentário todo mês aqui? Pega esse número e multiplica por duas a quatro
+> horas de redação. Numa casa com 40 fundos, isso dá **até 160 horas por
+> fechamento** — o mês inteiro de um analista sênior, escrevendo texto que a
+> atribuição já calculou."
+
+Pausa. Deixe a conta assentar. Só então:
+
+> "Todo fechamento é a mesma cena: a atribuição entrega números impecáveis, e
+> alguém senta para transformar aquilo em texto. Sem padrão, sem trilha, e não
+> escala. Eu vim mostrar o que fiz com esse vão."
+
+Não mencione IA ainda — a palavra só aparece na demo.
 
 ## 2–4 min · A virada (slides 3–4)
 

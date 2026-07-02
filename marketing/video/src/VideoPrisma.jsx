@@ -229,7 +229,7 @@ const GESTOR_SCENES = [
   (b) => <TitleScene kicker="O problema do fechamento" title="Os números ficam prontos." accent="O texto, não." caption={b.text} />,
   (b) => <ClipFrame src={staticFile("clips/cockpit.mp4")} kicker="Narrativa gerada · fontes citadas" caption={b.text} />,
   (b) => <ClipFrame src={staticFile("clips/radar.mp4")} kicker="Radar de Mercado · sentimento por estratégia" caption={b.text} kickerColor={MINT} />,
-  (b) => <ClipFrame src={staticFile("clips/copiloto.mp4")} kicker="Copiloto · respostas com citações" caption={b.text} />,
+  (b) => <ClipFrame src={staticFile("clips/perguntas.mp4")} kicker="O gestor pergunta · o sistema responde" caption={b.text} />,
   (b) => <ClipFrame src={staticFile("clips/guardrail.mp4")} kicker="Guardrails · o que ele recusa" caption={b.text} kickerColor={CORAL} />,
   (b) => <ClipFrame src={staticFile("clips/auditoria.mp4")} kicker="Trilha de auditoria · compliance" caption={b.text} kickerColor={MINT} />,
   (b) => <ComplementScene caption={b.text} />,

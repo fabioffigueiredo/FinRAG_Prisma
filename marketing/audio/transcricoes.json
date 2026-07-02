@@ -1,0 +1,138 @@
+{
+  "prisma": [
+    {
+      "ini": 0.0,
+      "fim": 6.76,
+      "txt": "Atribuir a performance de um portfólio de forma auditável é um dos maiores gargalos em gestão de ativos."
+    },
+    {
+      "ini": 7.14,
+      "fim": 9.64,
+      "txt": "Eu construí o Prisma para resolver isso."
+    },
+    {
+      "ini": 9.94,
+      "fim": 15.64,
+      "txt": "O Prisma é uma plataforma de atribuição de performance que decomposta o retorno por fator,"
+    },
+    {
+      "ini": 15.94,
+      "fim": 18.84,
+      "txt": "alocação, seleção e interação."
+    },
+    {
+      "ini": 19.52,
+      "fim": 22.02,
+      "txt": "Com rastreabilidade completa de dados,"
+    },
+    {
+      "ini": 22.32,
+      "fim": 27.6,
+      "txt": "cada cálculo é justificável para a auditoria perevique e complai-se regulatório."
+    },
+    {
+      "ini": 27.8,
+      "fim": 32.86,
+      "txt": "O dashboard é interativo, com visão de até cinco anos de série histórica."
+    },
+    {
+      "ini": 33.26,
+      "fim": 37.3,
+      "txt": "Se você atua em gestão de fundos ou governança de dados financeiros,"
+    },
+    {
+      "ini": 37.64,
+      "fim": 39.64,
+      "txt": "entre em contato pelo meu perfil."
+    }
+  ],
+  "finrag": [
+    {
+      "ini": 0.0,
+      "fim": 6.4,
+      "txt": "Retrival Augmented Generation funciona bem para texto genérico. Para dados financeiros, ele falha."
+    },
+    {
+      "ini": 6.4,
+      "fim": 12.4,
+      "txt": "Eu construí o FINRAG para resolver isso. O FINRAG é um pipeline de RAG especializado em"
+    },
+    {
+      "ini": 12.4,
+      "fim": 17.76,
+      "txt": "documentos do mercado financeiro brasileiro. Prospectos, relatórios de análise e demonstrações"
+    },
+    {
+      "ini": 17.76,
+      "fim": 23.76,
+      "txt": "contábeis. Ele combina indicação semântica com filtros de domínio financeiro, reduzindo o ruído"
+    },
+    {
+      "ini": 23.76,
+      "fim": 31.2,
+      "txt": "de recuperação em 40% em relação ao RAG padrão. Resultado? Respostas mais precisas com rastriabilidade"
+    },
+    {
+      "ini": 31.2,
+      "fim": 37.84,
+      "txt": "de fonte para a auditoria e compliance. O repositório está público no GitHub? Se você trabalha com"
+    },
+    {
+      "ini": 37.84,
+      "fim": 41.8,
+      "txt": "inteligência artificial aplicada a finanças, o link está no meu perfil."
+    }
+  ],
+  "finnlp": [
+    {
+      "ini": 0.0,
+      "fim": 3.6,
+      "txt": "Modelos de linguagem não foram criados para dados financeiros."
+    },
+    {
+      "ini": 3.6,
+      "fim": 5.76,
+      "txt": "Eu precisei adaptá-los."
+    },
+    {
+      "ini": 5.76,
+      "fim": 12.68,
+      "txt": "O FINNNLP é um pipeline de NLP especializado em textos do mercado financeiro brasileiro."
+    },
+    {
+      "ini": 12.68,
+      "fim": 21.08,
+      "txt": "Ele classifica notícias, estratos e relatórios com F1Score acima de 0,87, usando fine-tuning"
+    },
+    {
+      "ini": 21.08,
+      "fim": 25.96,
+      "txt": "de modelos, Transformer sobre corpos financeiro em português."
+    },
+    {
+      "ini": 25.96,
+      "fim": 32.56,
+      "txt": "Na prática, entrada de texto bruto, saída de sinal estruturado para tomada de decisão."
+    },
+    {
+      "ini": 32.56,
+      "fim": 36.2,
+      "txt": "Sem ambiguidade, sem retrabalho manual."
+    },
+    {
+      "ini": 36.2,
+      "fim": 39.4,
+      "txt": "O repositório está público no GitHub."
+    },
+    {
+      "ini": 39.4,
+      "fim": 46.48,
+      "txt": "Se você trabalha com dados financeiros e quer entender como NLP pode reduzir ruído operacional,"
+    },
+    {
+      "ini": 46.48,
+      "fim": 48.04,
+      "txt": "o link está no meu perfil."
+    }
+  ]
+}
