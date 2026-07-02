@@ -19,6 +19,7 @@ export type PerguntaResp = {
   backend: string;
   latency_ms: number;
   fallback?: boolean;
+  escopo?: boolean;
 };
 
 async function post<T>(path: string, body: unknown, fallback: T): Promise<T> {
@@ -47,8 +48,8 @@ export const NARRATIVA_FALLBACK: NarrativaResp = {
   fallback: true,
 };
 
-export function gerarNarrativa(backend: Backend): Promise<NarrativaResp> {
-  return post<NarrativaResp>("/narrativa", { fundo: "ALFA-33", backend }, {
+export function gerarNarrativa(backend: Backend, fundo: string): Promise<NarrativaResp> {
+  return post<NarrativaResp>("/narrativa", { fundo, backend }, {
     ...NARRATIVA_FALLBACK,
     backend,
   });
@@ -107,10 +108,10 @@ function parseCsvLocal(nome: string, csv: string): IngestResp {
   };
 }
 
-export function perguntar(pergunta: string, backend: Backend): Promise<PerguntaResp> {
+export function perguntar(pergunta: string, backend: Backend, fundo?: string): Promise<PerguntaResp> {
   return post<PerguntaResp>(
     "/perguntar",
-    { pergunta, backend },
+    { pergunta, backend, fundo },
     {
       resposta:
         "Com base nos trechos recuperados: o resultado do fundo no período foi sustentado sobretudo pelo carrego das estratégias de Crédito Privado e Juros Brasil, que juntas somaram +2,40 pp. O beta baixo (0,15) indica que o ganho não veio de exposição ao CDI, e sim de seleção — o que a atribuição registra como alpha (+1,10 pp).",
