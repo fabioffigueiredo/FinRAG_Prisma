@@ -1,66 +1,66 @@
 {
   "fps": 30,
-  "totalFrames": 3114,
+  "totalFrames": 3790,
   "beats": [
     {
       "index": 0,
       "text": "Prisma. A atribuição de performance, explicada.",
       "startFrame": 0,
-      "durFrames": 113
+      "durFrames": 195
     },
     {
       "index": 1,
       "text": "Todo fechamento, a atribuição entrega números impecáveis. E alguém passa horas transformando aquilo em texto para o comitê e para o cliente. Sem padrão, e sem trilha.",
-      "startFrame": 131,
-      "durFrames": 356
+      "startFrame": 213,
+      "durFrames": 369
     },
     {
       "index": 2,
       "text": "Este é o Prisma. Ao lado dos números do fundo, ele escreve a narrativa do resultado, na hora, citando a fonte de cada afirmação.",
-      "startFrame": 505,
-      "durFrames": 269
+      "startFrame": 600,
+      "durFrames": 288
     },
     {
       "index": 3,
       "text": "As notícias do período entram classificadas por sentimento, estratégia por estratégia. Quando o gestor pergunta por que o varejo pesou, a resposta cita a notícia.",
-      "startFrame": 792,
-      "durFrames": 338
+      "startFrame": 906,
+      "durFrames": 388
     },
     {
       "index": 4,
       "text": "E dá para conversar com o resultado. Cada resposta do copiloto vem fundamentada em trechos recuperados, com a origem visível na tela.",
-      "startFrame": 1148,
-      "durFrames": 279
+      "startFrame": 1312,
+      "durFrames": 355
     },
     {
       "index": 5,
       "text": "Tão importante quanto o que ele responde, é o que ele recusa. Pedido de recomendação de investimento é barrado na hora. Tentativa de injeção escondida em documento é bloqueada e exibida.",
-      "startFrame": 1445,
-      "durFrames": 375
+      "startFrame": 1685,
+      "durFrames": 526
     },
     {
       "index": 6,
       "text": "E cada consulta feita aqui deixa rastro: pergunta, motor, fontes citadas e bloqueios. Uma trilha de auditoria pronta para o compliance.",
-      "startFrame": 1838,
-      "durFrames": 299
+      "startFrame": 2229,
+      "durFrames": 362
     },
     {
       "index": 7,
       "text": "O Prisma não substitui a plataforma de atribuição que já temos. Ele se encaixa por cima: consome o resultado calculado e devolve a explicação.",
-      "startFrame": 2155,
-      "durFrames": 309
+      "startFrame": 2609,
+      "durFrames": 317
     },
     {
       "index": 8,
       "text": "O ganho é direto. Horas de redação viram minutos de revisão, o comentário sai padronizado, e a inteligência artificial roda cem por cento local, sem dado saindo da máquina.",
-      "startFrame": 2482,
-      "durFrames": 370
+      "startFrame": 2944,
+      "durFrames": 426
     },
     {
       "index": 9,
       "text": "A proposta: um piloto com um fundo real, medindo tempo economizado e qualidade aprovada. Vamos validar?",
-      "startFrame": 2870,
-      "durFrames": 226
+      "startFrame": 3388,
+      "durFrames": 384
     }
   ]
 }

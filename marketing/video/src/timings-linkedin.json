@@ -1,48 +1,48 @@
 {
   "fps": 30,
-  "totalFrames": 1381,
+  "totalFrames": 1731,
   "beats": [
     {
       "index": 0,
       "text": "A planilha da atribuição fica pronta. O texto, não.",
       "startFrame": 0,
-      "durFrames": 117
+      "durFrames": 156
     },
     {
       "index": 1,
       "text": "Então eu construí o Prisma: ele explica de onde veio o retorno do fundo, citando a fonte de cada frase.",
-      "startFrame": 135,
-      "durFrames": 214
+      "startFrame": 174,
+      "durFrames": 219
     },
     {
       "index": 2,
       "text": "As notícias entram com sentimento, por estratégia. Pergunte por que o varejo pesou, e a resposta cita a notícia.",
-      "startFrame": 367,
-      "durFrames": 241
+      "startFrame": 411,
+      "durFrames": 372
     },
     {
       "index": 3,
       "text": "Peça uma recomendação de compra, e ele recusa. O escopo é explicar, não recomendar.",
-      "startFrame": 626,
-      "durFrames": 186
+      "startFrame": 801,
+      "durFrames": 243
     },
     {
       "index": 4,
       "text": "Cada consulta deixa trilha: fontes, motor, bloqueios. Auditoria de verdade.",
-      "startFrame": 830,
-      "durFrames": 184
+      "startFrame": 1062,
+      "durFrames": 218
     },
     {
       "index": 5,
       "text": "E roda cem por cento local, num notebook. Nenhum dado sai da máquina.",
-      "startFrame": 1032,
-      "durFrames": 153
+      "startFrame": 1298,
+      "durFrames": 196
     },
     {
       "index": 6,
       "text": "Prisma. Código aberto, demo reproduzível. Link no primeiro comentário.",
-      "startFrame": 1203,
-      "durFrames": 160
+      "startFrame": 1512,
+      "durFrames": 201
     }
   ]
 }
