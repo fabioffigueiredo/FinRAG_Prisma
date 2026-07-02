@@ -1,6 +1,2 @@
-# Prisma API — depende também do núcleo FinRAG (PD1/Finrag/src via sys.path)
-# e das libs já instaladas na .venv do PD1 (faiss, sentence-transformers, numpy,
-# groq, rank-bm25, pydantic). Aqui só o que a API acrescenta:
-fastapi==0.115.6
-uvicorn==0.34.0
-requests==2.32.3
+# As dependências da API estão consolidadas na raiz do projeto:
+-r ../../requirements.txt

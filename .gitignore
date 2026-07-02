@@ -18,3 +18,13 @@ __pycache__/
 # Dados de execução (auditoria é gerada em runtime)
 data/audit/
 .superpowers/
+
+# Tooling local de agente (não versionar)
+.claude/
+skills-lock.json
+
+# Vídeo (artefatos pesados de render/captura)
+marketing/video/out/
+marketing/video/capture/raw/
+marketing/video/node_modules/
+

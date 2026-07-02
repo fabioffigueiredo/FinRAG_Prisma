@@ -5,12 +5,12 @@ Envolve o núcleo FinRAG (retrieval + guardrail + prompt aumentado) e expõe:
   POST /perguntar   -> Q&A RAG fundamentado, com citações e trechos bloqueados
   GET  /health      -> status + backends disponíveis
 
-Reusa o FinRAG sem reescrevê-lo; adiciona backend Ollama (local) e embeddings bge-m3.
+O pacote finrag (retrieval/guardrails) é vendorizado em ./finrag; adiciona
+backend Ollama (local) e embeddings bge-m3.
 """
 from __future__ import annotations
 
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -19,14 +19,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 HERE = Path(__file__).resolve()
-PRISMA = HERE.parents[2]          # .../PD1/prisma
-PD1 = HERE.parents[3]             # .../PD1
-FINRAG_SRC = PD1 / "Finrag" / "src"
+PRISMA = HERE.parents[2]          # raiz do projeto prisma
 CORPUS_DIR = PRISMA / "data" / "corpus"
 SEED_DIR = PRISMA / "data" / "seed"
 NOTICIAS_PATH = SEED_DIR / "noticias_alfa_classificadas.json"
-
-sys.path.insert(0, str(FINRAG_SRC))
 
 from finrag.corpus import load_documents, chunk_corpus  # noqa: E402
 from finrag.embeddings import SemanticIndex              # noqa: E402

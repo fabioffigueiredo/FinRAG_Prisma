@@ -1,0 +1,17 @@
+# Extras para reexecutar scripts/classificar_noticias.py (pipeline FinNLP vendorizado).
+# O resultado (data/seed/noticias_alfa_classificadas.json) já é versionado —
+# a API NÃO depende destes pacotes em runtime.
+numpy==1.26.4
+scipy==1.12.0            # pin de compatibilidade do gensim
+pandas
+scikit-learn==1.4.2
+datasets                  # financial_phrasebank (Hugging Face)
+nltk==3.8.1
+spacy==3.7.4
+gensim
+mlflow
+wordcloud
+beautifulsoup4
+matplotlib
+seaborn
+requests
