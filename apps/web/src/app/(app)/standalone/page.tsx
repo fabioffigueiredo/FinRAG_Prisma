@@ -53,7 +53,7 @@ export default function StandalonePage() {
           <Plug className="h-5 w-5 text-primary" strokeWidth={1.75} />
           <h2 className="mt-3 text-sm font-semibold text-foreground">Adaptador integrado</h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Consome o JSON do Performance-Attribution via API e explica os números que já existem.
+            Consome o JSON da plataforma de atribuição via API e explica os números que já existem.
           </p>
         </div>
         <div className="rounded-xl border border-primary/25 bg-card p-5">

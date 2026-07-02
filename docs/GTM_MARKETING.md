@@ -1,7 +1,7 @@
 # Prisma — Go-to-Market & Marketing
 
 ## Estratégia central: wedge interno → expansão
-Começar **dentro da BB Asset**, onde o Performance-Attribution já foi entregue e há um
+Começar **dentro da gestora parceira**, onde a plataforma de atribuição já foi entregue e há um
 champion (autor do projeto). Provar valor num fundo-piloto, transformar em caso interno e
 então expandir para outras gestoras.
 
@@ -50,5 +50,5 @@ O próprio POC é a peça de marketing. Roteiro de ~5 min:
 
 ## O "ask" da apresentação
 1. **Patrocínio** do gestor para um piloto.
-2. **Acesso** a um fundo real e à API do Performance-Attribution.
+2. **Acesso** a um fundo real e à API da plataforma de atribuição.
 3. **Aprovação** de um modelo de IA interno para o modo privado.

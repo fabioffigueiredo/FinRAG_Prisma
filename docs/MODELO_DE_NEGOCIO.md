@@ -2,8 +2,8 @@
 
 ## Uma frase
 O Prisma transforma a atribuição de performance em **narrativa auditável**: explica, em
-linguagem natural e fundamentada, de onde veio o retorno de cada fundo. Pluga no
-Performance-Attribution ou roda sozinho.
+linguagem natural e fundamentada, de onde veio o retorno de cada fundo. Pluga na
+plataforma de atribuição do cliente ou roda sozinho.
 
 ## Problema
 A atribuição de performance entrega **números** (contribuição por ativo/estratégia vs
@@ -18,14 +18,14 @@ Uma camada cognitiva que lê o resultado da atribuição e:
 3. **Protege** contra manipulação (guardrail anti-injeção) e roda em **modo privado/offline**.
 
 ## Arquitetura de produto: um núcleo, dois adaptadores
-- **Integrado** — consome a API do Performance-Attribution (BB Asset) e explica os números
+- **Integrado** — consome a API da plataforma de atribuição do cliente e explica os números
   que já existem.
 - **Standalone** — ingere exports (CSV/PDF) e roda sem integração.
 Mesma experiência; muda só o adaptador de dados. É a modularidade que atende à demanda do
 cliente sem reescrever o produto.
 
 ## Segmentos de cliente
-- **Wedge inicial:** BB Asset (há um champion interno e o Performance-Attribution já entregue).
+- **Wedge inicial:** uma grande gestora onde a plataforma de atribuição já foi entregue pelo autor (champion interno).
 - **Expansão:** gestoras de recursos e administradores de fundos (Brasil), áreas de
   performance/produtos e relações com investidores.
 
@@ -41,7 +41,7 @@ cliente sem reescrever o produto.
 |---|---|---|---|
 | **Módulo integrado** | Quem já tem plataforma de atribuição | Licença anual | R$ 200–500 mil/ano |
 | **SaaS standalone** | Gestoras sem plataforma | Fundos + assentos | R$ 50–150 mil/gestora/ano |
-| **Enterprise on-prem** | Bancos (ex.: BB) | Recorrente + suporte | sob consulta |
+| **Enterprise on-prem** | Bancos e grandes gestoras | Recorrente + suporte | sob consulta |
 | **Consultoria de implantação** | Novas instituições | Por projeto | R$ 100–300 mil/projeto |
 
 ## KPIs de sucesso (medidos no piloto)
@@ -65,8 +65,8 @@ cliente sem reescrever o produto.
 ## Riscos e mitigações
 - **Aprovação de modelo em banco** → arquitetura com backend de LLM **pluggável** (local aprovado).
 - **Alucinação** → geração **sempre sobre números que já existem** + citações + temperatura baixa.
-- **Restrições de intranet (sem npm/pip público, sem Docker)** → POC roda fora; produção
-  empacota bundle e usa mirror interno (Artifactory).
+- **Restrições de ambiente corporativo (sem registries públicos, sem Docker)** → POC roda fora; produção
+  empacota bundle e usa mirror interno de pacotes.
 
 ## Roadmap (após o POC)
 1. Piloto com 1 fundo real (interno).
