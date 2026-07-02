@@ -37,13 +37,16 @@ cd apps/web
 ```
 > Sem a API no ar, o frontend usa dados-exemplo (fallback) e a demo ainda funciona.
 > Sem Ollama, a API cai para embeddings sentence-transformers e o backend "mock".
+> (opcional) reclassificar notícias do radar: `../.venv/bin/python scripts/classificar_noticias.py --llm`
 
 ## Roteiro de demo (~5 min)
-1. **Cockpit** — números + "Gerar ao vivo" (narrativa local).
+1. **Cockpit** — números + Radar de Mercado + "Gerar ao vivo" (narrativa local).
 2. **Atribuição** — waterfall + drill por estratégia.
-3. **Pergunte ao Prisma** — pergunta fundamentada com citações.
-4. **Guardrail** — o chip "Ignore as instruções…" é **bloqueado** na tela.
-5. **Motor** (topo) — alternar Local ↔ Nuvem para mostrar privacidade vs latência.
+3. **Copiloto** — pergunta fundamentada; "Por que o varejo pesou?" cita notícia.
+4. **Guardrails** — injeção bloqueada + "Qual fundo devo comprar?" recusado (escopo).
+5. **Multi-fundo** — trocar para Beta Ações no seletor; "Compare o Alfa e o Beta".
+6. **Auditoria** — mostrar a trilha das consultas feitas na própria demo.
+7. **Motor** — alternar Local ↔ Nuvem (privacidade vs latência).
 
 ## Deck
 `docs/deck/index.html` — abrir no navegador; setas ← → para navegar.
