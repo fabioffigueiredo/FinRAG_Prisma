@@ -17,3 +17,4 @@ __pycache__/
 
 # Dados de execução (auditoria é gerada em runtime)
 data/audit/
+.superpowers/
