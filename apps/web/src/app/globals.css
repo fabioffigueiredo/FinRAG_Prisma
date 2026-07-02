@@ -1,0 +1,169 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Prisma — identidade "Obsidian Terminal" (evolução do FinNLP)
+  Ink profundo + ouro + menta(positivo)/coral(negativo).
+  Tipografia: Fraunces (display/números), Geist (UI), Geist Mono (dados).
+  Produto dark-first; tokens semânticos (nada de hex cru nos componentes).
+*/
+:root {
+  --radius: 0.75rem;
+
+  /* superfícies (ink) */
+  --background: #070a11;
+  --foreground: #f3eee3;
+  --card: #0e1320;
+  --card-foreground: #f3eee3;
+  --popover: #121826;
+  --popover-foreground: #f3eee3;
+
+  /* marca: ouro */
+  --primary: #f0b952;
+  --primary-foreground: #1a1204;
+
+  --secondary: #18202f;
+  --secondary-foreground: #f3eee3;
+  --muted: #141a27;
+  --muted-foreground: #9aa1b0;
+  --accent: #1b2333;
+  --accent-foreground: #f7e7c4;
+
+  /* estados */
+  --destructive: #fb7185; /* coral = risco/negativo */
+  --destructive-foreground: #1a0508;
+  --success: #5eead4;     /* menta = positivo */
+  --success-foreground: #04201b;
+
+  --border: rgba(232, 224, 208, 0.1);
+  --input: rgba(232, 224, 208, 0.14);
+  --ring: #f0b952;
+
+  /* charts */
+  --chart-1: #f0b952; /* ouro */
+  --chart-2: #5b8def; /* azul dado */
+  --chart-3: #5eead4; /* menta */
+  --chart-4: #c4a6ff; /* violeta */
+  --chart-5: #f4c26b; /* âmbar */
+
+  /* sidebar */
+  --sidebar: #0a0e17;
+  --sidebar-foreground: #c9cedd;
+  --sidebar-primary: #f0b952;
+  --sidebar-primary-foreground: #1a1204;
+  --sidebar-accent: #18202f;
+  --sidebar-accent-foreground: #f7e7c4;
+  --sidebar-border: rgba(232, 224, 208, 0.08);
+  --sidebar-ring: #f0b952;
+
+  --font-display: var(--font-fraunces);
+}
+
+.dark {
+  --background: #070a11;
+  --foreground: #f3eee3;
+  --card: #0e1320;
+  --card-foreground: #f3eee3;
+  --popover: #121826;
+  --popover-foreground: #f3eee3;
+  --primary: #f0b952;
+  --primary-foreground: #1a1204;
+  --secondary: #18202f;
+  --secondary-foreground: #f3eee3;
+  --muted: #141a27;
+  --muted-foreground: #9aa1b0;
+  --accent: #1b2333;
+  --accent-foreground: #f7e7c4;
+  --destructive: #fb7185;
+  --destructive-foreground: #1a0508;
+  --success: #5eead4;
+  --success-foreground: #04201b;
+  --border: rgba(232, 224, 208, 0.1);
+  --input: rgba(232, 224, 208, 0.14);
+  --ring: #f0b952;
+  --chart-1: #f0b952;
+  --chart-2: #5b8def;
+  --chart-3: #5eead4;
+  --chart-4: #c4a6ff;
+  --chart-5: #f4c26b;
+  --sidebar: #0a0e17;
+  --sidebar-foreground: #c9cedd;
+  --sidebar-primary: #f0b952;
+  --sidebar-primary-foreground: #1a1204;
+  --sidebar-accent: #18202f;
+  --sidebar-accent-foreground: #f7e7c4;
+  --sidebar-border: rgba(232, 224, 208, 0.08);
+  --sidebar-ring: #f0b952;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-fraunces);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(60rem 60rem at 85% -10%, rgba(240, 185, 82, 0.06), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 110%, rgba(94, 234, 212, 0.05), transparent 55%);
+    background-attachment: fixed;
+  }
+  .tabular {
+    font-feature-settings: "tnum" 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .font-display {
+    font-family: var(--font-display), Georgia, serif;
+  }
+}

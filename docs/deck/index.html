@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Prisma — Pitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#070a11; --surface:#0e1320; --elev:#121826;
+    --fg:#f3eee3; --muted:#9aa1b0; --dim:#5c6373;
+    --gold:#f0b952; --blue:#5b8def; --mint:#5eead4; --coral:#fb7185; --violet:#c4a6ff;
+    --border:rgba(232,224,208,.10);
+    --sans:'Geist',system-ui,sans-serif; --mono:'Geist Mono',monospace; --disp:'Fraunces',Georgia,serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--fg);font-family:var(--sans);
+    background-image:
+      radial-gradient(60rem 60rem at 85% -10%,rgba(240,185,82,.07),transparent 60%),
+      radial-gradient(50rem 50rem at -10% 110%,rgba(94,234,212,.06),transparent 55%);
+    overflow:hidden;
+  }
+  .deck{height:100vh;width:100vw;position:relative}
+  .slide{
+    position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;
+    padding:8vh 10vw;opacity:0;transition:opacity .35s ease;
+  }
+  .slide.active{display:flex;opacity:1}
+  .kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin-bottom:1.2rem}
+  h1{font-family:var(--disp);font-weight:600;font-size:clamp(2.4rem,6vw,4.6rem);line-height:1.02;letter-spacing:-.02em}
+  h2{font-family:var(--disp);font-weight:600;font-size:clamp(1.8rem,4vw,3rem);line-height:1.05;margin-bottom:1.4rem}
+  p.lead{font-size:clamp(1.05rem,2vw,1.5rem);color:var(--fg);max-width:52ch;line-height:1.5;margin-top:1.4rem}
+  p.sub{color:var(--muted);max-width:60ch;line-height:1.6;margin-top:1rem;font-size:1.05rem}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:2rem}
+  .cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;margin-top:2rem}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.6rem}
+  .card h3{font-size:1.1rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem}
+  .card p{color:var(--muted);font-size:.98rem;line-height:1.55}
+  .dot{width:9px;height:9px;border-radius:99px;display:inline-block}
+  .big{font-family:var(--disp);font-weight:600;font-size:clamp(2rem,5vw,3.4rem);font-variant-numeric:tabular-nums}
+  .grid-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:2rem}
+  .metric .l{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .accent{color:var(--gold)} .mint{color:var(--mint)} .coral{color:var(--coral)}
+  ul.clean{margin-top:1.4rem;max-width:60ch}
+  ul.clean li{list-style:none;padding:.55rem 0 .55rem 1.6rem;position:relative;color:var(--fg);line-height:1.5;border-bottom:1px solid var(--border)}
+  ul.clean li::before{content:"";position:absolute;left:0;top:1.05rem;width:8px;height:8px;border-radius:2px;background:var(--gold)}
+  .flow{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:2rem;font-family:var(--mono);font-size:.9rem}
+  .pill{background:var(--elev);border:1px solid var(--border);border-radius:10px;padding:.7rem 1rem}
+  .pill.gold{border-color:rgba(240,185,82,.4);color:var(--gold)}
+  .arrow{color:var(--dim)}
+  .brandmark{display:flex;align-items:center;gap:.9rem;margin-bottom:2.5rem}
+  .wm{font-family:var(--disp);font-weight:600;font-size:1.3rem}
+  .wm small{display:block;font-family:var(--mono);font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:400}
+  table.biz{width:100%;border-collapse:collapse;margin-top:2rem;font-size:1rem}
+  table.biz th,table.biz td{text-align:left;padding:.9rem 1rem;border-bottom:1px solid var(--border)}
+  table.biz th{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  table.biz td.mode{color:var(--gold);font-weight:500}
+  .nav{position:fixed;bottom:2rem;right:2.5rem;display:flex;align-items:center;gap:1rem;font-family:var(--mono);font-size:.8rem;color:var(--muted);z-index:10}
+  .nav button{background:var(--surface);border:1px solid var(--border);color:var(--fg);width:36px;height:36px;border-radius:9px;cursor:pointer;font-size:1rem}
+  .nav button:hover{border-color:var(--gold)}
+  .progress{position:fixed;top:0;left:0;height:3px;background:var(--gold);transition:width .35s ease;z-index:10}
+  .foot{position:fixed;bottom:2rem;left:2.5rem;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  svg.mark{width:44px;height:44px}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 capa -->
+  <section class="slide active">
+    <div class="brandmark">
+      <svg class="mark" viewBox="0 0 32 32" fill="none">
+        <path d="M1 15 H10" stroke="var(--muted)" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M11 22 L20 6 L23 22 Z" stroke="var(--gold)" stroke-width="1.75" stroke-linejoin="round" fill="rgba(240,185,82,.12)"/>
+        <path d="M23 13 L31 9" stroke="var(--mint)" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M23 16 L31 15" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M23 19 L31 22" stroke="var(--blue)" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M23 21.5 L31 27" stroke="var(--violet)" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <div class="wm">Prisma<small>Attribution Intelligence</small></div>
+    </div>
+    <h1>A atribuição de performance,<br><span class="accent">explicada.</span></h1>
+    <p class="lead">Transformo os números da atribuição em narrativa auditável — de onde veio o retorno de cada fundo, em linguagem natural e fundamentada.</p>
+    <p class="sub">Prova de conceito · núcleo cognitivo modular · integra ao Performance-Attribution ou roda sozinho.</p>
+  </section>
+
+  <!-- 2 problema -->
+  <section class="slide">
+    <div class="kicker">O problema</div>
+    <h2>A atribuição entrega números.<br>Alguém ainda escreve o texto — à mão.</h2>
+    <p class="sub">A decomposição do retorno por estratégia e ativo já existe. Mas o <strong>comentário de fundo</strong> — o que vai para o gestor, o comitê e o cliente — é redigido manualmente a cada fechamento: lento, inconsistente e sem trilha de auditoria. Não escala para dezenas de fundos.</p>
+  </section>
+
+  <!-- 3 insight -->
+  <section class="slide">
+    <div class="kicker">A virada</div>
+    <h2>IA <span class="accent">fundamentada</span> transforma número em narrativa auditável.</h2>
+    <p class="sub">Não é um chatbot genérico. É recuperação sobre as regras de atribuição e os números que já existem (RAG), com citações, guardrail e execução privada. A IA explica o que a conta já provou — risco de alucinação baixo por construção.</p>
+  </section>
+
+  <!-- 4 produto -->
+  <section class="slide">
+    <div class="kicker">O produto</div>
+    <h2>Um núcleo cognitivo, dois adaptadores.</h2>
+    <div class="flow">
+      <span class="pill">Pergunta / Resultado</span><span class="arrow">→</span>
+      <span class="pill gold">Núcleo Prisma · RAG + guardrail</span><span class="arrow">→</span>
+      <span class="pill">Narrativa + Q&A auditável</span>
+    </div>
+    <div class="cols">
+      <div class="card"><h3><span class="dot" style="background:var(--gold)"></span>Integrado</h3><p>Consome a API do Performance-Attribution e explica os números que já existem.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--mint)"></span>Standalone</h3><p>Ingere exports (CSV/PDF) e roda sem integração — o produto companheiro.</p></div>
+    </div>
+  </section>
+
+  <!-- 5 demo -->
+  <section class="slide">
+    <div class="kicker">Demonstração ao vivo</div>
+    <h2>O que você vai ver.</h2>
+    <ul class="clean">
+      <li><strong>Cockpit</strong> — retorno vs CDI, alpha/beta e a narrativa gerada na hora.</li>
+      <li><strong>Atribuição</strong> — waterfall e drill por estratégia até o ativo.</li>
+      <li><strong>Pergunte ao Prisma</strong> — resposta fundamentada, com citações.</li>
+      <li><strong>Guardrail</strong> — uma tentativa de injeção sendo <span class="coral">bloqueada</span> na tela.</li>
+      <li><strong>Motor</strong> — alternar <span class="accent">Local (privado)</span> ↔ Nuvem sem trocar nada.</li>
+    </ul>
+  </section>
+
+  <!-- 6 diferenciais -->
+  <section class="slide">
+    <div class="kicker">Por que é feito para banco</div>
+    <h2>Fundamentado. Auditável. Privado.</h2>
+    <div class="cols3">
+      <div class="card"><h3 class="accent">Citações</h3><p>Toda resposta aponta os trechos das regras que a sustentam.</p></div>
+      <div class="card"><h3 class="mint">Guardrail</h3><p>Injeções escondidas em documentos são detectadas e bloqueadas.</p></div>
+      <div class="card"><h3 style="color:var(--violet)">Privado</h3><p>Roda 100% local (Ollama) num MacBook Air M4 — nenhum dado sai da máquina.</p></div>
+    </div>
+    <p class="sub">Aderente a LGPD e ao apetite de risco de uma instituição financeira. Modelo de IA pluggável — troca-se pelo modelo aprovado internamente.</p>
+  </section>
+
+  <!-- 7 encaixe -->
+  <section class="slide">
+    <div class="kicker">Como pluga no que já existe</div>
+    <h2>Camada sobre o Performance-Attribution.</h2>
+    <div class="flow">
+      <span class="pill">DW / Bloomberg</span><span class="arrow">→</span>
+      <span class="pill">Performance-Attribution<br><small style="color:var(--dim)">FastAPI · contribuição vs benchmark</small></span><span class="arrow">→</span>
+      <span class="pill gold">Prisma<br><small style="color:var(--dim)">narrativa + Q&A</small></span><span class="arrow">→</span>
+      <span class="pill">Gestor · comitê · cliente</span>
+    </div>
+    <p class="sub">O backend REST do Performance-Attribution é a costura. O Prisma consome o JSON de resultado e devolve a narrativa — sem reescrever o que já foi entregue.</p>
+  </section>
+
+  <!-- 8 negócio -->
+  <section class="slide">
+    <div class="kicker">Modelo de negócio</div>
+    <h2>Três modos, três receitas.</h2>
+    <table class="biz">
+      <thead><tr><th>Modo</th><th>Cliente</th><th>Cobrança (hipótese)</th></tr></thead>
+      <tbody>
+        <tr><td class="mode">Módulo integrado</td><td>Quem já tem plataforma de atribuição</td><td>Licença anual por plataforma</td></tr>
+        <tr><td class="mode">SaaS standalone</td><td>Gestoras sem plataforma</td><td>Por nº de fundos + assentos</td></tr>
+        <tr><td class="mode">Enterprise intranet</td><td>Bancos (ex.: BB)</td><td>Licença recorrente + suporte</td></tr>
+      </tbody>
+    </table>
+    <p class="sub">North star: comentários de fundo gerados/aprovados e <span class="accent">horas de analista economizadas</span> por fechamento.</p>
+  </section>
+
+  <!-- 9 gtm -->
+  <section class="slide">
+    <div class="kicker">Como chega ao mercado</div>
+    <h2>Wedge interno → expansão.</h2>
+    <ul class="clean">
+      <li><strong>Agora</strong> — POC + sponsorship do gestor.</li>
+      <li><strong>30–60 dias</strong> — piloto sobre 1 fundo real; medir horas economizadas.</li>
+      <li><strong>Padrão interno</strong> — comentário gerado no fechamento.</li>
+      <li><strong>Expansão</strong> — SaaS para outras gestoras.</li>
+    </ul>
+  </section>
+
+  <!-- 10 ask -->
+  <section class="slide">
+    <div class="kicker">O pedido</div>
+    <h2>Para o piloto, preciso de três coisas.</h2>
+    <div class="cols3">
+      <div class="card"><h3 class="accent">Patrocínio</h3><p>Apoio do gestor para um piloto interno.</p></div>
+      <div class="card"><h3 class="accent">Acesso</h3><p>Um fundo real e a API do Performance-Attribution.</p></div>
+      <div class="card"><h3 class="accent">Modelo</h3><p>Aprovação de um modelo de IA interno para o modo privado.</p></div>
+    </div>
+    <p class="lead">O Prisma já roda. O próximo passo é provar valor num fundo de verdade.</p>
+  </section>
+
+</div>
+
+<div class="foot">Prisma · prova de conceito · dados fictícios</div>
+<div class="nav">
+  <span id="counter">1 / 10</span>
+  <button onclick="go(-1)" aria-label="anterior">‹</button>
+  <button onclick="go(1)" aria-label="próximo">›</button>
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  let i=0;
+  function render(){
+    slides.forEach((s,n)=>s.classList.toggle('active',n===i));
+    document.getElementById('counter').textContent=(i+1)+' / '+slides.length;
+    document.getElementById('progress').style.width=((i+1)/slides.length*100)+'%';
+  }
+  function go(d){i=Math.max(0,Math.min(slides.length-1,i+d));render()}
+  addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown','Enter'].includes(e.key)){e.preventDefault();go(1)}
+    if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();go(-1)}
+    if(e.key==='Home'){i=0;render()} if(e.key==='End'){i=slides.length-1;render()}
+  });
+  render();
+</script>
+</body>
+</html>
