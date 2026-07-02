@@ -36,15 +36,25 @@ cliente sem reescrever o produto.
   aderente a LGPD e ao apetite de risco de banco.
 - **PT-BR financeiro:** afinado ao vocabulário do mercado local.
 
-## Empacotamento e receita (3 modos = 3 adaptadores)
-| Modo | Cliente | Cobrança (hipótese a validar) |
-|---|---|---|
-| **Módulo integrado** | Quem já tem plataforma de atribuição | Licença anual por plataforma |
-| **SaaS standalone** | Gestoras sem plataforma | Por nº de fundos + assentos (mensal) |
-| **Enterprise on-prem/intranet** | Bancos (ex.: BB) | Licença recorrente + suporte; modelo de IA aprovado internamente |
+## Empacotamento e receita (4 modos = 4 adaptadores)
+| Modo | Cliente | Cobrança (hipótese a validar) | Faixa (hipótese a validar) |
+|---|---|---|---|
+| **Módulo integrado** | Quem já tem plataforma de atribuição | Licença anual | R$ 200–500 mil/ano |
+| **SaaS standalone** | Gestoras sem plataforma | Fundos + assentos | R$ 50–150 mil/gestora/ano |
+| **Enterprise on-prem** | Bancos (ex.: BB) | Recorrente + suporte | sob consulta |
+| **Consultoria de implantação** | Novas instituições | Por projeto | R$ 100–300 mil/projeto |
 
-**Métrica de valor (north star):** comentários de fundo gerados/aprovados por período e
-horas economizadas por analista.
+## KPIs de sucesso (medidos no piloto)
+
+| KPI | Baseline (hoje) | Meta pós-piloto |
+|---|---|---|
+| Tempo para responder consulta de performance | horas (manual) | segundos |
+| Tempo de redação do comentário de fundo | 2–4 h/fundo/fechamento | < 15 min (gerar + revisar) |
+| Consultas ao copiloto por gestor/dia | — | ≥ 5 |
+| % de comentários aprovados sem reescrita | — | ≥ 70% |
+| NPS dos gestores usuários | — | ≥ 8 |
+
+**North star:** horas de analista economizadas por fechamento.
 
 ## Diferenciais defensáveis (moat)
 - RAG **ancorado nas regras de atribuição** (não é chatbot genérico).

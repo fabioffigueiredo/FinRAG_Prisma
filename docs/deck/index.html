@@ -127,8 +127,35 @@
       <li><strong>Atribuição</strong> — waterfall e drill por estratégia até o ativo.</li>
       <li><strong>Pergunte ao Prisma</strong> — resposta fundamentada, com citações.</li>
       <li><strong>Guardrail</strong> — uma tentativa de injeção sendo <span class="coral">bloqueada</span> na tela.</li>
+      <li><strong>Radar de Mercado</strong> — sentimento de notícias por estratégia (FinNLP).</li>
+      <li><strong>Auditoria</strong> — cada consulta registrada com fontes e bloqueios.</li>
       <li><strong>Motor</strong> — alternar <span class="accent">Local (privado)</span> ↔ Nuvem sem trocar nada.</li>
     </ul>
+  </section>
+
+  <!-- 5b radar -->
+  <section class="slide">
+    <div class="kicker">O porquê de mercado</div>
+    <h2>Radar de Mercado: números <span class="accent">+ contexto.</span></h2>
+    <p class="sub">A atribuição diz <em>o quê</em>; as notícias dizem <em>por quê</em>. O pipeline de sentimento do FinNLP classifica o noticiário por estratégia e alimenta o RAG — o copiloto cita a notícia junto com a regra.</p>
+    <div class="cols3">
+      <div class="card"><h3 class="mint">Positivo</h3><p>Bancos com lucro recorde sustentam a contribuição do setor.</p></div>
+      <div class="card"><h3 class="coral">Negativo</h3><p>Varejo com margens pressionadas explica a única contribuição negativa.</p></div>
+      <div class="card"><h3 style="color:var(--violet)">Rastreável</h3><p>Cada citação aponta a notícia e a regra usadas na resposta.</p></div>
+    </div>
+  </section>
+
+  <!-- 5c compliance -->
+  <section class="slide">
+    <div class="kicker">Postura regulatória</div>
+    <h2>Explicativo por design.<br><span class="accent">Não preditivo.</span></h2>
+    <p class="sub">O Prisma explica resultados passados com base em dados calculados e regras citáveis. Ele <strong>não recomenda</strong> compra/venda e <strong>não faz previsão</strong> — perguntas nesse sentido são recusadas e registradas. Cada consulta gera trilha de auditoria: pergunta, motor, fontes, bloqueios e hash da resposta.</p>
+    <div class="flow">
+      <span class="pill">Pergunta</span><span class="arrow">→</span>
+      <span class="pill gold">Guardrails · injeção + escopo</span><span class="arrow">→</span>
+      <span class="pill">Resposta citável</span><span class="arrow">→</span>
+      <span class="pill">Trilha de auditoria</span>
+    </div>
   </section>
 
   <!-- 6 diferenciais -->
@@ -159,13 +186,14 @@
   <!-- 8 negócio -->
   <section class="slide">
     <div class="kicker">Modelo de negócio</div>
-    <h2>Três modos, três receitas.</h2>
+    <h2>Quatro modos, quatro receitas.</h2>
     <table class="biz">
-      <thead><tr><th>Modo</th><th>Cliente</th><th>Cobrança (hipótese)</th></tr></thead>
+      <thead><tr><th>Modo</th><th>Cliente</th><th>Cobrança</th><th>Faixa (hipótese)</th></tr></thead>
       <tbody>
-        <tr><td class="mode">Módulo integrado</td><td>Quem já tem plataforma de atribuição</td><td>Licença anual por plataforma</td></tr>
-        <tr><td class="mode">SaaS standalone</td><td>Gestoras sem plataforma</td><td>Por nº de fundos + assentos</td></tr>
-        <tr><td class="mode">Enterprise intranet</td><td>Bancos (ex.: BB)</td><td>Licença recorrente + suporte</td></tr>
+        <tr><td class="mode">Módulo integrado</td><td>Quem já tem plataforma de atribuição</td><td>Licença anual</td><td>R$ 200–500 mil/ano</td></tr>
+        <tr><td class="mode">SaaS standalone</td><td>Gestoras sem plataforma</td><td>Fundos + assentos</td><td>R$ 50–150 mil/gestora/ano</td></tr>
+        <tr><td class="mode">Enterprise on-prem</td><td>Bancos (ex.: BB)</td><td>Recorrente + suporte</td><td>sob consulta</td></tr>
+        <tr><td class="mode">Consultoria</td><td>Novas instituições</td><td>Por projeto</td><td>R$ 100–300 mil/projeto</td></tr>
       </tbody>
     </table>
     <p class="sub">North star: comentários de fundo gerados/aprovados e <span class="accent">horas de analista economizadas</span> por fechamento.</p>
@@ -179,7 +207,7 @@
       <li><strong>Agora</strong> — POC + sponsorship do gestor.</li>
       <li><strong>30–60 dias</strong> — piloto sobre 1 fundo real; medir horas economizadas.</li>
       <li><strong>Padrão interno</strong> — comentário gerado no fechamento.</li>
-      <li><strong>Expansão</strong> — SaaS para outras gestoras.</li>
+      <li><strong>Expansão</strong> — card de risco (VaR/Bloomberg), multi-período e SaaS para outras gestoras.</li>
     </ul>
   </section>
 

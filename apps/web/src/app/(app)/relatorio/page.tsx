@@ -1,8 +1,12 @@
-import { fundo, pct, pp } from "@/lib/fund";
+"use client";
+
+import { pct, pp } from "@/lib/fund";
+import { useFund } from "@/components/app/fund-context";
 import { NarrativeCard } from "@/components/app/narrative-card";
 import { SectionTitle } from "@/components/app/kpi";
 
 export default function RelatorioPage() {
+  const { fundo } = useFund();
   const r = fundo.resumo;
   return (
     <div className="mx-auto max-w-4xl space-y-6">

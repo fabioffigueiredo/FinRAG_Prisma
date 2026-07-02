@@ -1,4 +1,6 @@
 import fundoAlfa from "@/data/fundo_alfa.json";
+import fundoBeta from "@/data/fundo_beta.json";
+import fundoGama from "@/data/fundo_gama.json";
 
 export type Estrategia = {
   nome: string;
@@ -44,7 +46,13 @@ export type Fundo = {
   fics: Fic[];
 };
 
-export const fundo = fundoAlfa as Fundo;
+export const FUNDS: Record<string, Fundo> = {
+  "ALFA-33": fundoAlfa as Fundo,
+  "BETA-71": fundoBeta as Fundo,
+  "GAMA-12": fundoGama as Fundo,
+};
+
+export const FUND_PADRAO = "ALFA-33";
 
 /** Mapa de cor semântica -> variável CSS de chart (identidade Obsidian). */
 export const CHART_COLOR: Record<string, string> = {
@@ -87,9 +95,9 @@ export function sinalClasse(v: number): string {
   return "text-muted-foreground";
 }
 
-/** Ativos de uma estratégia, ordenados por contribuição desc. */
-export function ativosDe(nome: string): Ativo[] {
-  return fundo.ativos
+/** Ativos de uma estratégia do fundo dado, ordenados por contribuição desc. */
+export function ativosDe(f: Fundo, nome: string): Ativo[] {
+  return f.ativos
     .filter((a) => a.estrategia === nome)
     .sort((a, b) => b.contribuicao_pp - a.contribuicao_pp);
 }
