@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Gauge, Layers, MessagesSquare, Radar, FileText, Upload } from "lucide-react";
+import { Gauge, Layers, MessagesSquare, Radar, FileText, Upload, ScrollText } from "lucide-react";
 import { PrismaWordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ const NAV = [
   ]},
   { grupo: "Saídas", itens: [
     { href: "/relatorio", label: "Relatório", icon: FileText },
+    { href: "/auditoria", label: "Auditoria", icon: ScrollText },
     { href: "/standalone", label: "Modo standalone", icon: Upload },
   ]},
 ];
