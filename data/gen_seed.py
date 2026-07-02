@@ -1,110 +1,154 @@
-"""Gera o fundo-exemplo (fictício) de atribuição de performance para o POC Prisma.
+"""Gera os fundos-exemplo (fictícios) do POC Prisma.
 
-Fundo, ativos e números são sintéticos — nenhuma instituição real é citada
-(mesma regra de ouro dos projetos anteriores). A série diária é construída para
-fechar exatamente no retorno-alvo da cota e do benchmark.
+Três perfis: Alfa Multimercado (CDI), Beta Ações (IBOVESPA) e Gama Renda Fixa CP
+(CDI). Números sintéticos; a série diária fecha exatamente no alvo e a soma das
+contribuições por estratégia é igual ao retorno da cota.
 
-Uso: python3 data/gen_seed.py  -> escreve data/seed/fundo_alfa.json
+Uso: python3 data/gen_seed.py  -> escreve data/seed/fundo_{alfa,beta,gama}.json
 """
 import json
-import math
 import random
 from datetime import date, timedelta
 from pathlib import Path
 
-random.seed(42)
 OUT = Path(__file__).resolve().parent / "seed"
 OUT.mkdir(parents=True, exist_ok=True)
+DIAS = 63
 
-# ---- Alvos do período (2º trimestre 2026, abr–jun) ----
-RET_COTA = 4.25   # % no período
-RET_BENCH = 3.10  # % CDI no período
-DIAS = 63         # dias úteis aprox.
 
-# ---- Contribuição por estratégia (pp) — soma = RET_COTA ----
-estrategias = [
-    {"nome": "Crédito Privado",   "contribuicao_pp": 1.35, "peso_medio": 28.0, "cor": "gold"},
-    {"nome": "Juros Brasil",      "contribuicao_pp": 1.05, "peso_medio": 24.0, "cor": "blue"},
-    {"nome": "Bolsa Brasil",      "contribuicao_pp": 0.85, "peso_medio": 14.0, "cor": "green"},
-    {"nome": "Caixa e Over",      "contribuicao_pp": 0.48, "peso_medio": 18.0, "cor": "neutral"},
-    {"nome": "Câmbio (USD)",      "contribuicao_pp": 0.42, "peso_medio": 6.0,  "cor": "violet"},
-    {"nome": "Juros Global",      "contribuicao_pp": 0.35, "peso_medio": 8.0,  "cor": "blue"},
-    {"nome": "Custos e Despesas", "contribuicao_pp": -0.25, "peso_medio": 0.0, "cor": "red"},
-]
-
-# ---- Ativos por estratégia (pp) ----
-ativos = [
-    {"estrategia": "Crédito Privado", "ativo": "Debênture Infra Energia 2031", "contribuicao_pp": 0.55, "peso_medio": 11.0},
-    {"estrategia": "Crédito Privado", "ativo": "CDB Banco Médio 2027",         "contribuicao_pp": 0.40, "peso_medio": 9.0},
-    {"estrategia": "Crédito Privado", "ativo": "FIDC Recebíveis Comerciais",    "contribuicao_pp": 0.40, "peso_medio": 8.0},
-    {"estrategia": "Juros Brasil",    "ativo": "NTN-B 2030",                    "contribuicao_pp": 0.60, "peso_medio": 13.0},
-    {"estrategia": "Juros Brasil",    "ativo": "LTN 2027",                      "contribuicao_pp": 0.45, "peso_medio": 11.0},
-    {"estrategia": "Bolsa Brasil",    "ativo": "Setor Bancário",               "contribuicao_pp": 0.50, "peso_medio": 6.0},
-    {"estrategia": "Bolsa Brasil",    "ativo": "Setor Energia Elétrica",       "contribuicao_pp": 0.45, "peso_medio": 5.0},
-    {"estrategia": "Bolsa Brasil",    "ativo": "Setor Varejo",                 "contribuicao_pp": -0.10, "peso_medio": 3.0},
-    {"estrategia": "Caixa e Over",    "ativo": "Operações Compromissadas",     "contribuicao_pp": 0.48, "peso_medio": 18.0},
-    {"estrategia": "Câmbio (USD)",    "ativo": "USD/BRL a termo",              "contribuicao_pp": 0.42, "peso_medio": 6.0},
-    {"estrategia": "Juros Global",    "ativo": "Treasury 10Y (futuro)",        "contribuicao_pp": 0.35, "peso_medio": 8.0},
-]
-
-# ---- Série diária: passeio suave até o alvo ----
-def serie(alvo_pct, vol_diaria):
+def serie(alvo_pct, vol_diaria, seed):
+    rnd = random.Random(seed)
     passo = alvo_pct / DIAS
     acum, pts = 0.0, []
     for i in range(DIAS + 1):
         if i > 0:
-            acum += passo + random.uniform(-vol_diaria, vol_diaria)
+            acum += passo + rnd.uniform(-vol_diaria, vol_diaria)
         pts.append(acum)
-    # normaliza para fechar exatamente no alvo
     ajuste = alvo_pct - pts[-1]
     return [round(p + ajuste * (i / DIAS), 4) for i, p in enumerate(pts)]
 
-d0 = date(2026, 4, 1)
+
 def dias_uteis(n):
-    out, d = [], d0
+    out, d = [], date(2026, 4, 1)
     while len(out) <= n:
         if d.weekday() < 5:
             out.append(d.isoformat())
         d += timedelta(days=1)
     return out
 
-datas = dias_uteis(DIAS)
-cota = serie(RET_COTA, 0.11)
-bench = serie(RET_BENCH, 0.015)
-serie_diaria = [{"data": dt, "cota": c, "bench": b} for dt, c, b in zip(datas, cota, bench)]
 
-fundo = {
-    "fundo": {
-        "nome": "Alfa Multimercado FIC FIM",
-        "codigo": "ALFA-33",
-        "cnpj": "00.000.000/0001-00 (fictício)",
-        "benchmark": "CDI",
-        "periodo": "2º trimestre 2026 (abr–jun)",
-        "classe": "Multimercado Macro",
-    },
-    "resumo": {
-        "retorno_cota": RET_COTA,
-        "retorno_bench": RET_BENCH,
-        "excesso_pp": round(RET_COTA - RET_BENCH, 2),
-        "pct_cdi": round(RET_COTA / RET_BENCH * 100, 1),
-        "beta": 0.15,
-        "alpha_pp": 1.10,
-        "vol_anual": 4.8,
-        "patrimonio_mm": 1284.6,
-        "num_cotistas": 3120,
-    },
-    "estrategias": estrategias,
-    "ativos": ativos,
-    "serie_diaria": serie_diaria,
-    "fics": [
-        {"nome": "Alfa Crédito Master FI", "resultado_pp": 1.35, "diferencial_pp": 0.02},
-        {"nome": "Alfa Macro Master FI",   "resultado_pp": 2.60, "diferencial_pp": -0.01},
-    ],
+DATAS = dias_uteis(DIAS)
+
+
+def montar(meta, resumo, estrategias, ativos, fics, vol_cota, vol_bench, seed):
+    soma = round(sum(e["contribuicao_pp"] for e in estrategias), 2)
+    assert abs(soma - resumo["retorno_cota"]) < 0.01, (meta["codigo"], soma)
+    cota = serie(resumo["retorno_cota"], vol_cota, seed)
+    bench = serie(resumo["retorno_bench"], vol_bench, seed + 1)
+    return {
+        "fundo": meta,
+        "resumo": resumo,
+        "estrategias": estrategias,
+        "ativos": ativos,
+        "serie_diaria": [
+            {"data": dt, "cota": c, "bench": b} for dt, c, b in zip(DATAS, cota, bench)
+        ],
+        "fics": fics,
+    }
+
+
+FUNDOS = {
+    "fundo_alfa.json": montar(
+        {"nome": "Alfa Multimercado FIC FIM", "codigo": "ALFA-33",
+         "cnpj": "00.000.000/0001-00 (fictício)", "benchmark": "CDI",
+         "periodo": "2º trimestre 2026 (abr–jun)", "classe": "Multimercado Macro"},
+        {"retorno_cota": 4.25, "retorno_bench": 3.10, "excesso_pp": 1.15,
+         "pct_cdi": 137.1, "beta": 0.15, "alpha_pp": 1.10, "vol_anual": 4.8,
+         "patrimonio_mm": 1284.6, "num_cotistas": 3120},
+        [
+            {"nome": "Crédito Privado", "contribuicao_pp": 1.35, "peso_medio": 28.0, "cor": "gold"},
+            {"nome": "Juros Brasil", "contribuicao_pp": 1.05, "peso_medio": 24.0, "cor": "blue"},
+            {"nome": "Bolsa Brasil", "contribuicao_pp": 0.85, "peso_medio": 14.0, "cor": "green"},
+            {"nome": "Caixa e Over", "contribuicao_pp": 0.48, "peso_medio": 18.0, "cor": "neutral"},
+            {"nome": "Câmbio (USD)", "contribuicao_pp": 0.42, "peso_medio": 6.0, "cor": "violet"},
+            {"nome": "Juros Global", "contribuicao_pp": 0.35, "peso_medio": 8.0, "cor": "blue"},
+            {"nome": "Custos e Despesas", "contribuicao_pp": -0.25, "peso_medio": 0.0, "cor": "red"},
+        ],
+        [
+            {"estrategia": "Crédito Privado", "ativo": "Debênture Infra Energia 2031", "contribuicao_pp": 0.55, "peso_medio": 11.0},
+            {"estrategia": "Crédito Privado", "ativo": "CDB Banco Médio 2027", "contribuicao_pp": 0.40, "peso_medio": 9.0},
+            {"estrategia": "Crédito Privado", "ativo": "FIDC Recebíveis Comerciais", "contribuicao_pp": 0.40, "peso_medio": 8.0},
+            {"estrategia": "Juros Brasil", "ativo": "NTN-B 2030", "contribuicao_pp": 0.60, "peso_medio": 13.0},
+            {"estrategia": "Juros Brasil", "ativo": "LTN 2027", "contribuicao_pp": 0.45, "peso_medio": 11.0},
+            {"estrategia": "Bolsa Brasil", "ativo": "Setor Bancário", "contribuicao_pp": 0.50, "peso_medio": 6.0},
+            {"estrategia": "Bolsa Brasil", "ativo": "Setor Energia Elétrica", "contribuicao_pp": 0.45, "peso_medio": 5.0},
+            {"estrategia": "Bolsa Brasil", "ativo": "Setor Varejo", "contribuicao_pp": -0.10, "peso_medio": 3.0},
+            {"estrategia": "Caixa e Over", "ativo": "Operações Compromissadas", "contribuicao_pp": 0.48, "peso_medio": 18.0},
+            {"estrategia": "Câmbio (USD)", "ativo": "USD/BRL a termo", "contribuicao_pp": 0.42, "peso_medio": 6.0},
+            {"estrategia": "Juros Global", "ativo": "Treasury 10Y (futuro)", "contribuicao_pp": 0.35, "peso_medio": 8.0},
+        ],
+        [
+            {"nome": "Alfa Crédito Master FI", "resultado_pp": 1.35, "diferencial_pp": 0.02},
+            {"nome": "Alfa Macro Master FI", "resultado_pp": 2.60, "diferencial_pp": -0.01},
+        ],
+        vol_cota=0.11, vol_bench=0.015, seed=42,
+    ),
+    "fundo_beta.json": montar(
+        {"nome": "Beta Ações FIA", "codigo": "BETA-71",
+         "cnpj": "00.000.000/0002-00 (fictício)", "benchmark": "IBOVESPA",
+         "periodo": "2º trimestre 2026 (abr–jun)", "classe": "Ações Livre"},
+        {"retorno_cota": 6.40, "retorno_bench": 5.80, "excesso_pp": 0.60,
+         "pct_cdi": 110.3, "beta": 0.92, "alpha_pp": 0.85, "vol_anual": 14.2,
+         "patrimonio_mm": 642.3, "num_cotistas": 8540},
+        [
+            {"nome": "Setor Bancário", "contribuicao_pp": 2.60, "peso_medio": 22.0, "cor": "gold"},
+            {"nome": "Setor Energia", "contribuicao_pp": 1.90, "peso_medio": 18.0, "cor": "green"},
+            {"nome": "Small Caps", "contribuicao_pp": 1.40, "peso_medio": 10.0, "cor": "violet"},
+            {"nome": "Indústria", "contribuicao_pp": 1.10, "peso_medio": 14.0, "cor": "blue"},
+            {"nome": "Caixa e Over", "contribuicao_pp": 0.55, "peso_medio": 24.0, "cor": "neutral"},
+            {"nome": "Consumo e Varejo", "contribuicao_pp": -0.80, "peso_medio": 12.0, "cor": "red"},
+            {"nome": "Custos e Despesas", "contribuicao_pp": -0.35, "peso_medio": 0.0, "cor": "red"},
+        ],
+        [
+            {"estrategia": "Setor Bancário", "ativo": "Cesta Bancos Large Cap", "contribuicao_pp": 1.60, "peso_medio": 12.0},
+            {"estrategia": "Setor Bancário", "ativo": "Banco Digital Norte ON", "contribuicao_pp": 1.00, "peso_medio": 10.0},
+            {"estrategia": "Setor Energia", "ativo": "Elétricas Reguladas", "contribuicao_pp": 1.20, "peso_medio": 10.0},
+            {"estrategia": "Setor Energia", "ativo": "Geração Renovável ON", "contribuicao_pp": 0.70, "peso_medio": 8.0},
+            {"estrategia": "Small Caps", "ativo": "Cesta Small Caps", "contribuicao_pp": 1.40, "peso_medio": 10.0},
+            {"estrategia": "Indústria", "ativo": "Bens de Capital ON", "contribuicao_pp": 1.10, "peso_medio": 14.0},
+            {"estrategia": "Caixa e Over", "ativo": "Operações Compromissadas", "contribuicao_pp": 0.55, "peso_medio": 24.0},
+            {"estrategia": "Consumo e Varejo", "ativo": "Varejo Alimentar ON", "contribuicao_pp": -0.30, "peso_medio": 6.0},
+            {"estrategia": "Consumo e Varejo", "ativo": "E-commerce BR ON", "contribuicao_pp": -0.50, "peso_medio": 6.0},
+        ],
+        [],
+        vol_cota=0.35, vol_bench=0.30, seed=71,
+    ),
+    "fundo_gama.json": montar(
+        {"nome": "Gama Renda Fixa CP", "codigo": "GAMA-12",
+         "cnpj": "00.000.000/0003-00 (fictício)", "benchmark": "CDI",
+         "periodo": "2º trimestre 2026 (abr–jun)", "classe": "Renda Fixa Crédito Privado"},
+        {"retorno_cota": 3.45, "retorno_bench": 3.10, "excesso_pp": 0.35,
+         "pct_cdi": 111.3, "beta": 0.98, "alpha_pp": 0.35, "vol_anual": 0.6,
+         "patrimonio_mm": 2410.8, "num_cotistas": 15230},
+        [
+            {"nome": "Caixa e Over", "contribuicao_pp": 2.30, "peso_medio": 40.0, "cor": "neutral"},
+            {"nome": "Crédito Privado", "contribuicao_pp": 0.85, "peso_medio": 45.0, "cor": "gold"},
+            {"nome": "Juros Brasil", "contribuicao_pp": 0.42, "peso_medio": 15.0, "cor": "blue"},
+            {"nome": "Custos e Despesas", "contribuicao_pp": -0.12, "peso_medio": 0.0, "cor": "red"},
+        ],
+        [
+            {"estrategia": "Caixa e Over", "ativo": "Operações Compromissadas", "contribuicao_pp": 2.30, "peso_medio": 40.0},
+            {"estrategia": "Crédito Privado", "ativo": "CDB AAA 2027", "contribuicao_pp": 0.45, "peso_medio": 25.0},
+            {"estrategia": "Crédito Privado", "ativo": "Debênture Saneamento 2028", "contribuicao_pp": 0.28, "peso_medio": 12.0},
+            {"estrategia": "Crédito Privado", "ativo": "LF Banco Grande Porte", "contribuicao_pp": 0.12, "peso_medio": 8.0},
+            {"estrategia": "Juros Brasil", "ativo": "LFT 2028", "contribuicao_pp": 0.42, "peso_medio": 15.0},
+        ],
+        [],
+        vol_cota=0.02, vol_bench=0.015, seed=12,
+    ),
 }
 
-path = OUT / "fundo_alfa.json"
-path.write_text(json.dumps(fundo, ensure_ascii=False, indent=2), encoding="utf-8")
-soma = round(sum(e["contribuicao_pp"] for e in estrategias), 2)
-print("escrito:", path)
-print("soma contribuições estratégias:", soma, "| alvo cota:", RET_COTA, "| ok:", abs(soma - RET_COTA) < 0.01)
-print("série:", len(serie_diaria), "pontos | cota fim:", serie_diaria[-1]["cota"], "| bench fim:", serie_diaria[-1]["bench"])
+for nome, dados in FUNDOS.items():
+    (OUT / nome).write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
+    r = dados["resumo"]
+    print(f"{nome}: cota {r['retorno_cota']}% vs bench {r['retorno_bench']}% ok")

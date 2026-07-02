@@ -7,10 +7,12 @@ export function Waterfall({
   estrategias,
   total,
   benchmark,
+  benchLabel,
 }: {
   estrategias: Estrategia[];
   total: number;
   benchmark: number;
+  benchLabel: string;
 }) {
   const ordenadas = [...estrategias].sort((a, b) => b.contribuicao_pp - a.contribuicao_pp);
   const passos = [
@@ -58,7 +60,7 @@ export function Waterfall({
       {/* linha do benchmark */}
       <line x1={pad.l} x2={W - pad.r} y1={y(benchmark)} y2={y(benchmark)} stroke="var(--muted-foreground)" strokeWidth="1" strokeDasharray="4 4" />
       <text x={W - pad.r} y={y(benchmark) - 4} textAnchor="end" className="fill-[var(--muted-foreground)] text-[9px]">
-        CDI {benchmark.toFixed(2)}%
+        {benchLabel} {benchmark.toFixed(2)}%
       </text>
       {/* eixo zero */}
       <line x1={pad.l} x2={W - pad.r} y1={y(0)} y2={y(0)} stroke="var(--border)" strokeWidth="1" />

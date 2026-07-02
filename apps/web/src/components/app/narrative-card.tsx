@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Zap, Quote } from "lucide-react";
 import { gerarNarrativa, NARRATIVA_FALLBACK, type NarrativaResp } from "@/lib/api";
 import { useBackend, BACKENDS } from "@/components/app/backend-context";
+import { useFund } from "@/components/app/fund-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
@@ -13,18 +14,25 @@ import {
 
 export function NarrativeCard() {
   const { backend } = useBackend();
-  const [data, setData] = useState<NarrativaResp>(NARRATIVA_FALLBACK);
+  const { codigo } = useFund();
+  const [data, setData] = useState<NarrativaResp | null>(
+    codigo === "ALFA-33" ? NARRATIVA_FALLBACK : null,
+  );
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setData(codigo === "ALFA-33" ? NARRATIVA_FALLBACK : null);
+  }, [codigo]);
 
   async function gerar() {
     setLoading(true);
-    const r = await gerarNarrativa(backend);
+    const r = await gerarNarrativa(backend, codigo);
     setData(r);
     setLoading(false);
   }
 
   const label = BACKENDS.find((b) => b.id === backend)?.label ?? backend;
-  const aoVivo = !data.fallback && data.backend !== "seed";
+  const aoVivo = !!data && !data.fallback && data.backend !== "seed";
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-primary/25 bg-card p-5">
@@ -54,6 +62,10 @@ export function NarrativeCard() {
           <Skeleton className="h-4 w-[97%]" />
           <Skeleton className="h-4 w-3/4" />
         </div>
+      ) : !data ? (
+        <p className="text-sm text-muted-foreground">
+          Sem narrativa para este fundo ainda — clique em <span className="text-primary">Gerar ao vivo</span>.
+        </p>
       ) : (
         <>
           <p className="text-[15px] leading-relaxed text-foreground/90">{data.texto}</p>

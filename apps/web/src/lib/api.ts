@@ -19,6 +19,7 @@ export type PerguntaResp = {
   backend: string;
   latency_ms: number;
   fallback?: boolean;
+  escopo?: boolean;
 };
 
 async function post<T>(path: string, body: unknown, fallback: T): Promise<T> {
@@ -47,8 +48,8 @@ export const NARRATIVA_FALLBACK: NarrativaResp = {
   fallback: true,
 };
 
-export function gerarNarrativa(backend: Backend): Promise<NarrativaResp> {
-  return post<NarrativaResp>("/narrativa", { fundo: "ALFA-33", backend }, {
+export function gerarNarrativa(backend: Backend, fundo: string): Promise<NarrativaResp> {
+  return post<NarrativaResp>("/narrativa", { fundo, backend }, {
     ...NARRATIVA_FALLBACK,
     backend,
   });
@@ -107,10 +108,10 @@ function parseCsvLocal(nome: string, csv: string): IngestResp {
   };
 }
 
-export function perguntar(pergunta: string, backend: Backend): Promise<PerguntaResp> {
+export function perguntar(pergunta: string, backend: Backend, fundo?: string): Promise<PerguntaResp> {
   return post<PerguntaResp>(
     "/perguntar",
-    { pergunta, backend },
+    { pergunta, backend, fundo },
     {
       resposta:
         "Com base nos trechos recuperados: o resultado do fundo no período foi sustentado sobretudo pelo carrego das estratégias de Crédito Privado e Juros Brasil, que juntas somaram +2,40 pp. O beta baixo (0,15) indica que o ganho não veio de exposição ao CDI, e sim de seleção — o que a atribuição registra como alpha (+1,10 pp).",
@@ -123,4 +124,52 @@ export function perguntar(pergunta: string, backend: Backend): Promise<PerguntaR
       latency_ms: 0,
     },
   );
+}
+
+export type Noticia = {
+  id: string;
+  titulo: string;
+  corpo: string;
+  estrategia: string;
+  data: string;
+  sentimento: "positivo" | "negativo" | "neutro";
+  confianca: number;
+};
+
+export type RadarResp = {
+  ok: boolean;
+  noticias: Noticia[];
+  agregado: Record<string, { pos: number; neg: number; neu: number; total: number; liquido: number }>;
+};
+
+export async function getRadar(): Promise<RadarResp> {
+  try {
+    const res = await fetch(`${BASE}/radar`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as RadarResp;
+  } catch {
+    return { ok: false, noticias: [], agregado: {} };
+  }
+}
+
+export type Consulta = {
+  timestamp: string;
+  rota: string;
+  fundo: string;
+  pergunta: string;
+  backend: string;
+  latency_ms: number;
+  fontes: string[];
+  bloqueados: string[];
+  escopo?: boolean;
+};
+
+export async function getAuditoria(): Promise<{ ok: boolean; consultas: Consulta[] }> {
+  try {
+    const res = await fetch(`${BASE}/auditoria?limit=50`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as { ok: boolean; consultas: Consulta[] };
+  } catch {
+    return { ok: false, consultas: [] };
+  }
 }

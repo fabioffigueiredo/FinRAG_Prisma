@@ -1,17 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { fundo, ativosDe, pp, pct, sinalClasse } from "@/lib/fund";
+import { ativosDe, pp, pct, sinalClasse } from "@/lib/fund";
+import { useFund } from "@/components/app/fund-context";
 import { SectionTitle } from "@/components/app/kpi";
 import { ContributionBars } from "@/components/charts/contribution-bars";
 import { Waterfall } from "@/components/charts/waterfall";
 import { cn } from "@/lib/utils";
 
 export default function AtribuicaoPage() {
+  const { fundo } = useFund();
   const [sel, setSel] = useState(fundo.estrategias[0].nome);
-  const ativos = ativosDe(sel);
+  useEffect(() => {
+    setSel(fundo.estrategias[0].nome);
+  }, [fundo]);
+  const ativos = ativosDe(fundo, sel);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -31,6 +36,7 @@ export default function AtribuicaoPage() {
             estrategias={fundo.estrategias}
             total={fundo.resumo.retorno_cota}
             benchmark={fundo.resumo.retorno_bench}
+            benchLabel={fundo.fundo.benchmark}
           />
         </div>
       </div>
