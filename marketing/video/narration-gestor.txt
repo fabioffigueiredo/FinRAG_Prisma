@@ -1,0 +1,10 @@
+Prisma. A atribuição de performance, explicada.
+Todo fechamento, a atribuição entrega números impecáveis. E alguém passa horas transformando aquilo em texto para o comitê e para o cliente. Sem padrão, e sem trilha.
+Este é o Prisma. Ao lado dos números do fundo, ele escreve a narrativa do resultado, na hora, citando a fonte de cada afirmação.
+As notícias do período entram classificadas por sentimento, estratégia por estratégia. Quando o gestor pergunta por que o varejo pesou, a resposta cita a notícia.
+E dá para conversar com o resultado. Cada resposta do copiloto vem fundamentada em trechos recuperados, com a origem visível na tela.
+Tão importante quanto o que ele responde, é o que ele recusa. Pedido de recomendação de investimento é barrado na hora. Tentativa de injeção escondida em documento é bloqueada e exibida.
+E cada consulta feita aqui deixa rastro: pergunta, motor, fontes citadas e bloqueios. Uma trilha de auditoria pronta para o compliance.
+O Prisma não substitui a plataforma de atribuição que já temos. Ele se encaixa por cima: consome o resultado calculado e devolve a explicação.
+O ganho é direto. Horas de redação viram minutos de revisão, o comentário sai padronizado, e a inteligência artificial roda cem por cento local, sem dado saindo da máquina.
+A proposta: um piloto com um fundo real, medindo tempo economizado e qualidade aprovada. Vamos validar?
