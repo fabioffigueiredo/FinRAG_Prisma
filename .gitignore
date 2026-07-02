@@ -1,0 +1,19 @@
+# Node / Next.js
+node_modules/
+.next/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Ambiente e segredos
+.env
+.env.local
+
+# Sistema
+.DS_Store
+
+# Dados de execução (auditoria é gerada em runtime)
+data/audit/
