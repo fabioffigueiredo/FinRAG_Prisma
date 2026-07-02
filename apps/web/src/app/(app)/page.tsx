@@ -4,6 +4,7 @@ import { pct, pp, brlMM, num } from "@/lib/fund";
 import { useFund } from "@/components/app/fund-context";
 import { Kpi, SectionTitle } from "@/components/app/kpi";
 import { NarrativeCard } from "@/components/app/narrative-card";
+import { RadarCard } from "@/components/app/radar-card";
 import { PerformanceLine } from "@/components/charts/performance-line";
 import { ContributionBars } from "@/components/charts/contribution-bars";
 
@@ -28,6 +29,8 @@ export default function CockpitPage() {
       </div>
 
       <NarrativeCard />
+
+      <RadarCard />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-5 lg:col-span-2">
