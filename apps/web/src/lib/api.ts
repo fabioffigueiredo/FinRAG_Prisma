@@ -151,3 +151,25 @@ export async function getRadar(): Promise<RadarResp> {
     return { ok: false, noticias: [], agregado: {} };
   }
 }
+
+export type Consulta = {
+  timestamp: string;
+  rota: string;
+  fundo: string;
+  pergunta: string;
+  backend: string;
+  latency_ms: number;
+  fontes: string[];
+  bloqueados: string[];
+  escopo?: boolean;
+};
+
+export async function getAuditoria(): Promise<{ ok: boolean; consultas: Consulta[] }> {
+  try {
+    const res = await fetch(`${BASE}/auditoria?limit=50`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as { ok: boolean; consultas: Consulta[] };
+  } catch {
+    return { ok: false, consultas: [] };
+  }
+}
