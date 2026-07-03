@@ -1,0 +1,17 @@
+# Prisma API — imagem de runtime (contexto de build = raiz do repo)
+FROM python:3.12-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir \
+      fastapi==0.115.6 uvicorn==0.34.0 requests==2.32.3 pydantic==2.13.4 \
+      numpy==1.26.4 faiss-cpu==1.8.0 sentence-transformers==3.0.1 \
+      rank-bm25==0.2.2 groq==1.5.0
+
+# núcleo (finrag vendorizado vem junto de services/prisma-api) + dados do POC
+COPY services/prisma-api /app/services/prisma-api
+COPY data /app/data
+
+WORKDIR /app/services/prisma-api
+EXPOSE 8000
+# Sem Ollama na VPS: embeddings caem para sentence-transformers (baixado no 1º boot).
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
