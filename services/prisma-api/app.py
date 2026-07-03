@@ -34,6 +34,7 @@ from embed import get_embed_fn                                # noqa: E402
 from escopo import pede_recomendacao, INSTRUCAO_ESCOPO, RESPOSTA_ESCOPO  # noqa: E402
 import audit                                                             # noqa: E402
 from radar import carregar_noticias, agregar                             # noqa: E402
+from sinais import gerar_sinais, AVISO_LEGAL, MODELO_VERSAO              # noqa: E402
 
 app = FastAPI(title="Prisma API", version="0.1.0")
 app.add_middleware(
@@ -265,6 +266,18 @@ def radar_endpoint():
     if not noticias:
         return {"ok": False, "noticias": [], "agregado": {}}
     return {"ok": True, "noticias": noticias, "agregado": agregar(noticias)}
+
+
+@app.get("/sinais")
+def sinais_endpoint(fundo: str = "ALFA-33"):
+    """Alertas probabilísticos de apoio à decisão (modelo de regras auditável)."""
+    fundos = STATE.get("fundos") or {}
+    f = fundos.get(fundo) or (next(iter(fundos.values())) if fundos else None)
+    noticias = STATE.get("noticias") or []
+    if not f or not noticias:
+        return {"ok": False, "sinais": [], "aviso": AVISO_LEGAL, "modelo": MODELO_VERSAO}
+    sinais = gerar_sinais(f, agregar(noticias), noticias)
+    return {"ok": True, "sinais": sinais, "aviso": AVISO_LEGAL, "modelo": MODELO_VERSAO}
 
 
 @app.get("/auditoria")
