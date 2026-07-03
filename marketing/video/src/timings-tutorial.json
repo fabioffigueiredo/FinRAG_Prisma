@@ -1,78 +1,84 @@
 {
   "fps": 30,
-  "totalFrames": 2937,
+  "totalFrames": 3329,
   "beats": [
     {
       "index": 0,
       "text": "Bem-vindo ao Prisma. Neste tutorial, você vê como usar a plataforma, tela por tela.",
       "startFrame": 0,
-      "durFrames": 193
+      "durFrames": 183
     },
     {
       "index": 1,
       "text": "Para começar, suba a API e o painel com dois comandos. O passo a passo completo está no leia-me do repositório.",
-      "startFrame": 211,
-      "durFrames": 231
+      "startFrame": 201,
+      "durFrames": 247
     },
     {
       "index": 2,
       "text": "Este é o Cockpit. No topo, você escolhe o fundo e o período. Os cartões mostram retorno, excesso e alfa.",
-      "startFrame": 460,
-      "durFrames": 272
+      "startFrame": 466,
+      "durFrames": 276
     },
     {
       "index": 3,
       "text": "Clique em gerar ao vivo, e a narrativa do resultado é escrita na hora, com as fontes citadas logo abaixo.",
-      "startFrame": 750,
-      "durFrames": 241
+      "startFrame": 760,
+      "durFrames": 209
     },
     {
       "index": 4,
       "text": "Na tela de atribuição, o gráfico em cascata mostra como cada estratégia construiu o retorno. Clique numa estratégia para abrir os ativos.",
-      "startFrame": 1009,
-      "durFrames": 304
+      "startFrame": 987,
+      "durFrames": 255
     },
     {
       "index": 5,
       "text": "No radar de mercado, as notícias do período aparecem classificadas por sentimento, com filtro por estratégia.",
-      "startFrame": 1331,
-      "durFrames": 221
+      "startFrame": 1260,
+      "durFrames": 210
     },
     {
       "index": 6,
       "text": "No copiloto, digite a sua pergunta. A resposta vem fundamentada, com as fontes e a pontuação de cada trecho.",
-      "startFrame": 1570,
-      "durFrames": 228
+      "startFrame": 1488,
+      "durFrames": 236
     },
     {
       "index": 7,
       "text": "Peça uma recomendação de compra, e o sistema recusa. Tente uma injeção de comando, e o guardrail bloqueia na tela.",
-      "startFrame": 1816,
+      "startFrame": 1742,
       "durFrames": 232
     },
     {
       "index": 8,
       "text": "Tudo fica registrado na auditoria. Pergunta, motor, fontes citadas e bloqueios.",
-      "startFrame": 2066,
-      "durFrames": 176
+      "startFrame": 1992,
+      "durFrames": 190
     },
     {
       "index": 9,
-      "text": "No seletor de motor, você escolhe a inteligência artificial. Local e privada, ou na nuvem, com a sua chave de API.",
-      "startFrame": 2260,
-      "durFrames": 272
+      "text": "Na tela de sinais, alertas de apoio à decisão apontam, com probabilidade e evidências, onde olhar primeiro. Sempre com aviso: é apoio, não recomendação.",
+      "startFrame": 2200,
+      "durFrames": 391
     },
     {
       "index": 10,
-      "text": "No modo standalone, você sobe um arquivo de resultados e tem a mesma experiência, sem integração nenhuma.",
-      "startFrame": 2550,
-      "durFrames": 187
+      "text": "No seletor de motor, você escolhe a inteligência artificial. Local e privada, ou na nuvem, com a sua chave de API.",
+      "startFrame": 2609,
+      "durFrames": 274
     },
     {
       "index": 11,
+      "text": "No modo standalone, você sobe um arquivo de resultados e tem a mesma experiência, sem integração nenhuma.",
+      "startFrame": 2901,
+      "durFrames": 208
+    },
+    {
+      "index": 12,
       "text": "Pronto. Clone o repositório, rode a demonstração, e me conte o que achou.",
-      "startFrame": 2755,
-      "durFrames": 164
+      "startFrame": 3127,
+      "durFrames": 184
     }
   ]
 }
