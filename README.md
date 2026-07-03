@@ -58,6 +58,14 @@ poucas linhas — incluindo o modelo homologado do seu ambiente corporativo.
 
 Passo a passo de todas as telas (~2 min): [`docs/media/tutorial.mp4`](docs/media/tutorial.mp4)
 
+## 📐 Qualidade & governança
+
+- **Recuperação (RAG):** Hit@4 = 100% · MRR 0,48 sobre golden queries do domínio —
+  ver [`docs/METRICAS_RAG.md`](docs/METRICAS_RAG.md) (reproduza: `python scripts/avaliar_rag.py`).
+- **Governança de IA** (escopo, aprovação humana, auditoria, CVM): [`docs/GOVERNANCA_IA.md`](docs/GOVERNANCA_IA.md).
+- **Sinais** de apoio à decisão (probabilísticos, auditáveis, nunca recomendação):
+  [`docs/GOVERNANCA_IA.md`](docs/GOVERNANCA_IA.md) §3.
+
 ## Como rodar
 
 **Pré-requisitos:** Node 22 + pnpm; Python 3.12 + [uv](https://docs.astral.sh/uv/);

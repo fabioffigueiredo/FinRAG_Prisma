@@ -233,6 +233,7 @@ const GESTOR_SCENES = [
   (b) => <ClipFrame src={staticFile("clips/perguntas.mp4")} kicker="O gestor pergunta · o sistema responde" caption={b.text} />,
   (b) => <ClipFrame src={staticFile("clips/guardrail.mp4")} kicker="Guardrails · o que ele recusa" caption={b.text} kickerColor={CORAL} />,
   (b) => <ClipFrame src={staticFile("clips/auditoria.mp4")} kicker="Trilha de auditoria · compliance" caption={b.text} kickerColor={MINT} />,
+  (b) => <ClipFrame src={staticFile("clips/sinais.mp4")} kicker="Sinais · apoio à decisão (não recomendação)" caption={b.text} kickerColor={CORAL} />,
   (b) => <ComplementScene caption={b.text} />,
   (b) => <ValueScene caption={b.text} />,
   (b) => <ClosingScene caption={b.text} cta="Vamos validar um piloto com um fundo real?" sub="Prisma · Attribution Intelligence" />,
@@ -290,8 +291,9 @@ const TUTORIAL_SCENES = [
   (b) => <ClipFrame src={staticFile("clips/perguntas.mp4")} kicker="Passo 5 · Pergunte ao copiloto" caption={b.text} />,
   (b) => <ClipFrame src={staticFile("clips/guardrail.mp4")} kicker="Passo 6 · Guardrails em ação" caption={b.text} kickerColor={CORAL} />,
   (b) => <ClipFrame src={staticFile("clips/auditoria.mp4")} kicker="Passo 7 · Auditoria" caption={b.text} kickerColor={MINT} />,
-  (b) => <ClipFrame src={staticFile("clips/motor.mp4")} kicker="Passo 8 · IA local ou nuvem (API)" caption={b.text} />,
-  (b) => <ClipFrame src={staticFile("clips/standalone.mp4")} kicker="Passo 9 · Modo standalone" caption={b.text} kickerColor={MINT} />,
+  (b) => <ClipFrame src={staticFile("clips/sinais.mp4")} kicker="Passo 8 · Sinais (apoio à decisão)" caption={b.text} kickerColor={CORAL} />,
+  (b) => <ClipFrame src={staticFile("clips/motor.mp4")} kicker="Passo 9 · IA local ou nuvem (API)" caption={b.text} />,
+  (b) => <ClipFrame src={staticFile("clips/standalone.mp4")} kicker="Passo 10 · Modo standalone" caption={b.text} kickerColor={MINT} />,
   (b) => <ClosingScene caption={b.text} cta="git clone · README com o passo a passo" sub="github.com/fabioffigueiredo/FinRAG_Prisma" />,
 ];
 
