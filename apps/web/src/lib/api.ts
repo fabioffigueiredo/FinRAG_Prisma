@@ -173,3 +173,33 @@ export async function getAuditoria(): Promise<{ ok: boolean; consultas: Consulta
     return { ok: false, consultas: [] };
   }
 }
+
+export type Sinal = {
+  estrategia: string;
+  nivel: "ok" | "atencao" | "alerta";
+  prob_neg: number;
+  sentimento_liquido: number;
+  noticias_no_periodo: number;
+  contribuicao_pp: number;
+  evidencias: string[];
+  base_calculo: string;
+  validacao: string;
+  modelo_versao: string;
+};
+
+export type SinaisResp = {
+  ok: boolean;
+  sinais: Sinal[];
+  aviso: string;
+  modelo: string;
+};
+
+export async function getSinais(fundo: string): Promise<SinaisResp> {
+  try {
+    const res = await fetch(`${BASE}/sinais?fundo=${encodeURIComponent(fundo)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as SinaisResp;
+  } catch {
+    return { ok: false, sinais: [], aviso: "", modelo: "" };
+  }
+}

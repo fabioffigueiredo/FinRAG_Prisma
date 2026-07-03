@@ -3,6 +3,7 @@
 import { pct, pp } from "@/lib/fund";
 import { useFund } from "@/components/app/fund-context";
 import { NarrativeCard } from "@/components/app/narrative-card";
+import { ApprovalFlow } from "@/components/app/approval-flow";
 import { SectionTitle } from "@/components/app/kpi";
 
 export default function RelatorioPage() {
@@ -17,10 +18,9 @@ export default function RelatorioPage() {
             Comentário de gestão gerado a partir da atribuição · {fundo.fundo.periodo}
           </p>
         </div>
-        <span className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
-          Exportar PDF · em breve no POC
-        </span>
       </div>
+
+      <ApprovalFlow />
 
       {/* pré-visualização estilo documento */}
       <div className="rounded-xl border border-border bg-card p-8">
