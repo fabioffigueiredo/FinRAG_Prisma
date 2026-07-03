@@ -89,3 +89,38 @@ sem ressalvas.
 **Prioridades para subir para 9,5:** (1) CI com badge verde; (2) piloto com 1 fundo
 real e números medidos no lugar das hipóteses; (3) tela de aprovação humana do
 comentário; (4) métricas de RAG publicadas no README.
+
+---
+
+# O caminho para o 10 — plano crítico, artefato por artefato
+
+Sem complacência: 10 significa "nada a apontar num comitê hostil". Eis o que falta.
+
+## Repositório (8,5–9,0 → 10)
+- [x] Licença MIT, badges, topics, CI *(feito em 03/jul)*.
+- [ ] **CI verde visível** — o badge só vale depois do primeiro run passar; conferir no Actions.
+- [ ] **Métricas de RAG no README**: tabela Precision@k/groundedness sobre um conjunto de perguntas douradas do próprio Prisma (o método já existe do FinRAG — é reaplicar e publicar).
+- [ ] **Release v0.1.0** com changelog — sinaliza disciplina de versionamento.
+- [ ] **1 GIF de 10s no topo do README** (cockpit→pergunta→resposta) — decisão de 3 segundos do recrutador.
+- [ ] Testes de frontend (2–3 com Playwright já instalado: rota, dropdown, chip de escopo).
+
+## Vídeos (8,0–8,5 → 10)
+- [ ] **Voz real em TODOS os vídeos** — o clone é 8; sua leitura real é 10. O roteiro de gravação está pronto (`marketing/audio/ROTEIRO_GRAVACAO.md`, ~3,5min de leitura). É o item de maior impacto por esforço.
+- [ ] Música de fundo sutil (-28dB, sem vocal) + fade in/out — separa "bom" de "produzido".
+- [ ] Thumbnail dedicada para YouTube (frame do título + logo, texto grande).
+- [ ] 2–3 zooms/close-ups nos momentos-chave (selo de bloqueio, citação) em vez de tela cheia constante.
+
+## Post + carrossel (8,5 → 10)
+- [ ] Publicar e **iterar com dados**: o 10 de LinkedIn se mede em retenção/comentários; ajustar o gancho após o 1º post é parte do jogo.
+- [ ] Slide 1 com um número no gancho ("160 horas por fechamento") — números param o scroll.
+- [ ] Prova social: 1 depoimento (mesmo informal) de um colega de mesa após demo interna.
+
+## Deck + apresentação ao gestor (8,0–9,0 → 10)
+- [ ] **Piloto medido** — sem número real, o teto é 9. Com "no piloto, 12 comentários gerados, 9 aprovados sem edição, 3h→14min" o deck vira imbatível.
+- [ ] Tela/fluxo de **aprovação humana** do comentário (review → aprovar → export) — fecha a objeção nº1 do compliance.
+- [ ] Slide "Prisma Sinais" (fase 2) com o parecer preditivo — mostra visão de roadmap com governança (`marketing/pesquisa/ANALISE_SINAIS_PREDITIVOS.md`).
+- [ ] Ensaio cronometrado com um ouvinte real uma vez antes do dia.
+
+## Você, como candidato/autor (a avaliação que importa)
+- Forças já visíveis: domínio do negócio + entrega ponta a ponta + honestidade técnica (hipóteses declaradas, limitações documentadas) — raro.
+- Para o 10: **uma evidência de impacto real** (piloto, mesmo pequeno) e **uma peça pública com tração** (post publicado com engajamento orgânico). Portfólio perfeito sem uso real é 9; com um usuário de verdade, é 10.
