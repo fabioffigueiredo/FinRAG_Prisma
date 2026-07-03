@@ -1,0 +1,24 @@
+# Prisma Web — Next.js standalone sob subpath (contexto de build = raiz do repo)
+FROM node:22-slim AS build
+WORKDIR /app
+RUN corepack enable
+COPY apps/web/package.json apps/web/pnpm-lock.yaml apps/web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY apps/web ./
+# variáveis de build (baked no bundle) — ajuste o domínio se necessário
+ARG PRISMA_BASE_PATH=/prisma
+ARG NEXT_PUBLIC_PRISMA_API=https://wiki.ioi.ia.br/prisma/api
+ARG NEXT_PUBLIC_PRISMA_HOSTED=1
+ENV PRISMA_BASE_PATH=$PRISMA_BASE_PATH \
+    NEXT_PUBLIC_PRISMA_API=$NEXT_PUBLIC_PRISMA_API \
+    NEXT_PUBLIC_PRISMA_HOSTED=$NEXT_PUBLIC_PRISMA_HOSTED
+RUN pnpm build
+
+FROM node:22-slim AS run
+WORKDIR /app
+ENV NODE_ENV=production PORT=3100 HOSTNAME=0.0.0.0
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+EXPOSE 3100
+CMD ["node", "server.js"]

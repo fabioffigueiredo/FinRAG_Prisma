@@ -154,6 +154,20 @@ def _fund_chunk(f: dict):
     return Chunk(doc_id=f"dados_{cod}", chunk_id=0, text=_resumo_texto(f), source=f"dados:{cod}")
 
 
+def _gerar_seguro(backend: str, prompt: str, **kw) -> tuple[str, bool]:
+    """Gera texto; se o backend falhar (ex.: Ollama ausente na VPS, timeout de
+    nuvem), degrada para o MockLLM e sinaliza. Nunca deixa a demo cair."""
+    try:
+        return get_backend(backend).generate(prompt, **kw).strip(), False
+    except Exception:
+        from finrag.models import MockLLM
+        texto = MockLLM(
+            "No período, o resultado do fundo foi sustentado principalmente pelo "
+            "carrego das estratégias de crédito privado e juros."
+        ).generate(prompt).strip()
+        return texto, True
+
+
 @app.get("/health")
 def health():
     return {
@@ -182,8 +196,7 @@ def narrativa(req: NarrativaReq):
         f"NÚMEROS DO FUNDO:\n{_resumo_texto(f)}\n\n"
         f"REGRAS DE ATRIBUIÇÃO (contexto):\n{regras}" + INSTRUCAO_ESCOPO + "\n\nComentário:"
     )
-    llm = get_backend(req.backend)
-    texto = llm.generate(prompt, temperature=0.1, max_tokens=220).strip()
+    texto, degradado = _gerar_seguro(req.backend, prompt, temperature=0.1, max_tokens=220)
     lat = int((time.perf_counter() - t0) * 1000)
     fontes = [c.source for c, _ in retr]
     audit.registrar(rota="/narrativa", fundo=f["fundo"]["codigo"], pergunta="(narrativa do período)",
@@ -194,6 +207,7 @@ def narrativa(req: NarrativaReq):
         "citacoes": [{"fonte": c.source, "trecho": c.text[:160].strip(), "score": round(float(s), 3)} for c, s in retr],
         "backend": req.backend,
         "latency_ms": lat,
+        "degradado": degradado,
     }
 
 
@@ -216,8 +230,7 @@ def perguntar(req: PerguntaReq):
     safe, blocked = sanitize_chunks([c for c, _ in retr])
     contexto = fund_chunks + safe
     prompt = build_augmented_prompt(req.pergunta, contexto) + INSTRUCAO_ESCOPO
-    llm = get_backend(req.backend)
-    resposta = llm.generate(prompt, temperature=0.1, max_tokens=380).strip()
+    resposta, _deg = _gerar_seguro(req.backend, prompt, temperature=0.1, max_tokens=380)
     lat = int((time.perf_counter() - t0) * 1000)
     citacoes = [
         {"fonte": c.source, "trecho": c.text[:160].strip(),
