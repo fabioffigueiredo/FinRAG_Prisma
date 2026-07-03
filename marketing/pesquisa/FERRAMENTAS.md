@@ -34,13 +34,6 @@ consistente). Ferramentas abaixo são complementos ou alternativas pontuais.
 > (Voicebox/OmniVoice) são de geração mais nova; vale um teste com 30–60s de
 > gravação limpa. Enquanto isso, os áudios ElevenLabs são a fonte oficial.
 
-## Skills/agentes instalados neste projeto
-
-| Skill | O que faz | Instalação |
-|---|---|---|
-| **find-skills** (vercel-labs/skills) | Descobre skills públicas p/ qualquer tarefa (`npx skills find`) | `npx skills add vercel-labs/skills --skill find-skills` |
-| **improve** (shadcn/improve) | Audita o código (read-only) e escreve planos p/ modelos baratos executarem | `npx skills add shadcn/improve` |
-
 ## Diretrizes LinkedIn (2026) aplicadas ao kit
 
 - **Vídeo nativo** (upload direto) é favorecido pelo algoritmo; nada de link do YouTube.
