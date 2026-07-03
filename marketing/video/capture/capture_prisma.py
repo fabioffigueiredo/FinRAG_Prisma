@@ -172,6 +172,17 @@ def clip_motor(browser):
     _save(ctx, page, "motor")
 
 
+def clip_sinais(browser):
+    """Tela Sinais: alertas probabilísticos de apoio à decisão."""
+    ctx = _ctx(browser, "sinais")
+    page = ctx.new_page()
+    page.goto(BASE + "/sinais", wait_until="networkidle")
+    page.wait_for_timeout(2600)
+    page.mouse.wheel(0, 500)
+    page.wait_for_timeout(2600)
+    _save(ctx, page, "sinais")
+
+
 def clip_standalone(browser):
     """Modo standalone: upload de export com a mesma experiência."""
     ctx = _ctx(browser, "standalone")
@@ -188,6 +199,7 @@ TODAS = {
     "guardrail": clip_guardrail, "auditoria": clip_auditoria,
     "atribuicao": clip_atribuicao, "perguntas": clip_perguntas,
     "motor": clip_motor, "standalone": clip_standalone,
+    "sinais": clip_sinais,
 }
 
 

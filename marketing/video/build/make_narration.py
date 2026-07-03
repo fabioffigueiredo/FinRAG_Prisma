@@ -45,7 +45,8 @@ def _duration(path: Path) -> float:
 
 # --- modo clone (XTTS-v2 com a voz do Fabio) ---------------------------------
 CLONE = "--clone" in sys.argv
-REF_VOZ = ROOT.parents[0] / "audio" / "ref_voz_limpa.wav"   # marketing/audio/
+# referência v2: gravação nova do Fabio (limpa) + cauda de termos técnicos
+REF_VOZ = ROOT.parents[0] / "audio" / "ref_fabio_full.wav"  # marketing/audio/
 # fala fonética p/ termos que o TTS tropeça; a legenda mantém a grafia correta
 SPOKEN_MAP = {
     "compliance": "compláians",
