@@ -8,6 +8,7 @@ import { loadFont as loadGeist } from "@remotion/google-fonts/Inter";
 import { loadFont as loadMono } from "@remotion/google-fonts/JetBrainsMono";
 import timingsGestor from "./timings.json";
 import timingsLinkedIn from "./timings-linkedin.json";
+import timingsTutorial from "./timings-tutorial.json";
 
 const { fontFamily: DISPLAY } = loadFraunces();
 const { fontFamily: SANS } = loadGeist();
@@ -268,6 +269,37 @@ export const PrismaLinkedInVideo = () => (
     <Audio src={staticFile("narration-linkedin.mp3")} />
     {timingsLinkedIn.beats.map((b) => {
       const render = LINKEDIN_SCENES[b.index];
+      if (!render) return null;
+      return (
+        <Sequence key={b.index} from={b.startFrame} durationInFrames={b.durFrames + 18}>
+          {render(b)}
+        </Sequence>
+      );
+    })}
+  </AbsoluteFill>
+);
+
+/* ===================== TUTORIAL · 1920×1080 (para o GitHub) ===================== */
+const TUTORIAL_SCENES = [
+  (b) => <TitleScene kicker="Tutorial" title="Como usar o Prisma," accent="tela por tela." caption={b.text} />,
+  (b) => <TitleScene kicker="Passo 0 · Setup" title="Dois comandos e o app está no ar." accent="Instruções no README." caption={b.text} />,
+  (b) => <ClipFrame src={staticFile("clips/cockpit.mp4")} kicker="Passo 1 · Cockpit" caption={b.text} />,
+  (b) => <ClipFrame src={staticFile("clips/cockpit.mp4")} kicker="Passo 2 · Gerar narrativa ao vivo" caption={b.text} />,
+  (b) => <ClipFrame src={staticFile("clips/atribuicao.mp4")} kicker="Passo 3 · Atribuição e drill" caption={b.text} />,
+  (b) => <ClipFrame src={staticFile("clips/radar.mp4")} kicker="Passo 4 · Radar de Mercado" caption={b.text} kickerColor={MINT} />,
+  (b) => <ClipFrame src={staticFile("clips/perguntas.mp4")} kicker="Passo 5 · Pergunte ao copiloto" caption={b.text} />,
+  (b) => <ClipFrame src={staticFile("clips/guardrail.mp4")} kicker="Passo 6 · Guardrails em ação" caption={b.text} kickerColor={CORAL} />,
+  (b) => <ClipFrame src={staticFile("clips/auditoria.mp4")} kicker="Passo 7 · Auditoria" caption={b.text} kickerColor={MINT} />,
+  (b) => <ClipFrame src={staticFile("clips/motor.mp4")} kicker="Passo 8 · IA local ou nuvem (API)" caption={b.text} />,
+  (b) => <ClipFrame src={staticFile("clips/standalone.mp4")} kicker="Passo 9 · Modo standalone" caption={b.text} kickerColor={MINT} />,
+  (b) => <ClosingScene caption={b.text} cta="git clone · README com o passo a passo" sub="github.com/fabioffigueiredo/FinRAG_Prisma" />,
+];
+
+export const PrismaTutorialVideo = () => (
+  <AbsoluteFill style={{ background: INK, fontFamily: SANS }}>
+    <Audio src={staticFile("narration-tutorial.mp3")} />
+    {timingsTutorial.beats.map((b) => {
+      const render = TUTORIAL_SCENES[b.index];
       if (!render) return null;
       return (
         <Sequence key={b.index} from={b.startFrame} durationInFrames={b.durFrames + 18}>

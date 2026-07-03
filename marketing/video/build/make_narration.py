@@ -23,6 +23,10 @@ if VARIANT == "linkedin":
     TXT = ROOT / "narration.txt"
     OUT_MP3 = ROOT / "public" / "narration-linkedin.mp3"
     OUT_JSON = ROOT / "src" / "timings-linkedin.json"
+elif VARIANT == "tutorial":
+    TXT = ROOT / "narration-tutorial.txt"
+    OUT_MP3 = ROOT / "public" / "narration-tutorial.mp3"
+    OUT_JSON = ROOT / "src" / "timings-tutorial.json"
 else:
     TXT = ROOT / "narration-gestor.txt"
     OUT_MP3 = ROOT / "public" / "narration-gestor.mp3"
@@ -45,7 +49,8 @@ REF_VOZ = ROOT.parents[0] / "audio" / "ref_voz_limpa.wav"   # marketing/audio/
 # fala fonética p/ termos que o TTS tropeça; a legenda mantém a grafia correta
 SPOKEN_MAP = {
     "compliance": "compláians",
-    "Prisma": "Prisma",
+    "API": "a pê í",
+    "standalone": "stand alôune",
 }
 
 _tts = None

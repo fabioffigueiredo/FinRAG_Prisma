@@ -1,5 +1,7 @@
 # Prisma — Attribution Intelligence
 
+[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-13%20passing-5eead4)
+
 **A atribuição de performance, explicada.** O Prisma é uma camada cognitiva que
 transforma o resultado da atribuição de performance de fundos em **narrativa
 auditável**: explica em linguagem natural de onde veio o retorno, responde
@@ -44,10 +46,17 @@ docs/                  deck de pitch (HTML), arquitetura, riscos, negócio
 marketing/             kit de divulgação (LinkedIn, vídeos, apresentações)
 ```
 
-Três backends de LLM selecionáveis na UI:
-- **Local (Ollama)** — `llama3.1:8b` + embeddings `bge-m3:567m` · privado/offline;
-- **Nuvem (Groq)** — `llama-3.1-8b-instant` · baixa latência (requer `GROQ_API_KEY`);
+**A IA é flexível — local ou via chave de API.** Três backends selecionáveis na UI:
+- **Local (Ollama)** — `llama3.1:8b` + embeddings `bge-m3:567m` · 100% privado/offline;
+- **Nuvem (Groq)** — `llama-3.1-8b-instant` · baixa latência (basta `GROQ_API_KEY`);
 - **Demo (mock)** — determinístico, roda sem nada.
+
+O backend é pluggável (`get_llm`): qualquer endpoint OpenAI-compatível entra com
+poucas linhas — incluindo o modelo homologado do seu ambiente corporativo.
+
+## 🎥 Tutorial em vídeo
+
+Passo a passo de todas as telas (~2 min): [`docs/media/tutorial.mp4`](docs/media/tutorial.mp4)
 
 ## Como rodar
 
