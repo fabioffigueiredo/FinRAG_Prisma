@@ -159,10 +159,35 @@ def clip_perguntas(browser):
     _save(ctx, page, "perguntas")
 
 
+def clip_motor(browser):
+    """Seletor de motor: Local ↔ Nuvem ↔ Demo (flexibilidade da IA)."""
+    ctx = _ctx(browser, "motor")
+    page = ctx.new_page()
+    page.goto(BASE + "/", wait_until="networkidle")
+    page.wait_for_timeout(1600)
+    for nome in ("Nuvem", "Demo", "Local"):
+        page.get_by_role("button", name=nome, exact=True).click()
+        page.wait_for_timeout(1400)
+    page.wait_for_timeout(1200)
+    _save(ctx, page, "motor")
+
+
+def clip_standalone(browser):
+    """Modo standalone: upload de export com a mesma experiência."""
+    ctx = _ctx(browser, "standalone")
+    page = ctx.new_page()
+    page.goto(BASE + "/standalone?demo=1", wait_until="networkidle")
+    page.wait_for_timeout(2600)
+    page.mouse.wheel(0, 350)
+    page.wait_for_timeout(2400)
+    _save(ctx, page, "standalone")
+
+
 TODAS = {
     "cockpit": clip_cockpit, "radar": clip_radar, "copiloto": clip_copiloto,
     "guardrail": clip_guardrail, "auditoria": clip_auditoria,
     "atribuicao": clip_atribuicao, "perguntas": clip_perguntas,
+    "motor": clip_motor, "standalone": clip_standalone,
 }
 
 

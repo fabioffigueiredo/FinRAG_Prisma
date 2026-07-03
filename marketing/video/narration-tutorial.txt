@@ -1,0 +1,12 @@
+Bem-vindo ao Prisma. Neste tutorial, você vê como usar a plataforma, tela por tela.
+Para começar, suba a API e o painel com dois comandos. O passo a passo completo está no leia-me do repositório.
+Este é o Cockpit. No topo, você escolhe o fundo e o período. Os cartões mostram retorno, excesso e alfa.
+Clique em gerar ao vivo, e a narrativa do resultado é escrita na hora, com as fontes citadas logo abaixo.
+Na tela de atribuição, o gráfico em cascata mostra como cada estratégia construiu o retorno. Clique numa estratégia para abrir os ativos.
+No radar de mercado, as notícias do período aparecem classificadas por sentimento, com filtro por estratégia.
+No copiloto, digite a sua pergunta. A resposta vem fundamentada, com as fontes e a pontuação de cada trecho.
+Peça uma recomendação de compra, e o sistema recusa. Tente uma injeção de comando, e o guardrail bloqueia na tela.
+Tudo fica registrado na auditoria. Pergunta, motor, fontes citadas e bloqueios.
+No seletor de motor, você escolhe a inteligência artificial. Local e privada, ou na nuvem, com a sua chave de API.
+No modo standalone, você sobe um arquivo de resultados e tem a mesma experiência, sem integração nenhuma.
+Pronto. Clone o repositório, rode a demonstração, e me conte o que achou.
