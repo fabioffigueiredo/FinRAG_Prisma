@@ -1,3 +1,4 @@
+import { TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Kpi({
@@ -16,17 +17,25 @@ export function Kpi({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl border border-border bg-card p-4",
+        "group relative overflow-hidden card-surface p-4",
         accent && "border-primary/25",
       )}
     >
       {accent && (
         <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
       )}
-      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+        {tone === "positive" && (
+          <TrendingUp className="h-4 w-4 shrink-0 text-[var(--success)]" strokeWidth={2} aria-hidden />
+        )}
+        {tone === "negative" && (
+          <TrendingDown className="h-4 w-4 shrink-0 text-[var(--destructive)]" strokeWidth={2} aria-hidden />
+        )}
+      </div>
       <p
         className={cn(
-          "font-display tabular mt-2 text-3xl font-semibold leading-none",
+          "font-display tabular mt-2 text-2xl font-semibold leading-none sm:text-3xl",
           tone === "positive" && "text-[var(--success)]",
           tone === "negative" && "text-[var(--destructive)]",
           tone === "default" && "text-foreground",
