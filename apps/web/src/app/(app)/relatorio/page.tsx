@@ -5,25 +5,28 @@ import { useFund } from "@/components/app/fund-context";
 import { NarrativeCard } from "@/components/app/narrative-card";
 import { ApprovalFlow } from "@/components/app/approval-flow";
 import { SectionTitle } from "@/components/app/kpi";
+import { PageStagger, Item } from "@/components/app/reveal";
 
 export default function RelatorioPage() {
   const { fundo } = useFund();
   const r = fundo.resumo;
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-end justify-between">
+    <PageStagger className="mx-auto max-w-4xl space-y-6">
+      <Item className="flex items-end justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold text-foreground">Relatório</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Comentário de gestão gerado a partir da atribuição · {fundo.fundo.periodo}
           </p>
         </div>
-      </div>
+      </Item>
 
-      <ApprovalFlow />
+      <Item>
+        <ApprovalFlow />
+      </Item>
 
       {/* pré-visualização estilo documento */}
-      <div className="rounded-xl border border-border bg-card p-8">
+      <Item className="card-surface p-8">
         <div className="border-b border-border pb-4">
           <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             Comentário de performance
@@ -48,8 +51,8 @@ export default function RelatorioPage() {
           são fundamentadas nos trechos citados; números conferem com a soma das contribuições por
           estratégia. Uso interno — dados fictícios neste exemplo.
         </p>
-      </div>
-    </div>
+      </Item>
+    </PageStagger>
   );
 }
 
