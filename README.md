@@ -43,7 +43,6 @@ data/corpus/           regras de atribuição (corpus RAG, indexado com bge-m3)
 data/seed/             3 fundos-exemplo + notícias classificadas (sentimento)
 scripts/               classificação offline de notícias (pipeline TF-IDF+SVM)
 docs/                  deck de pitch (HTML), arquitetura, riscos, negócio
-marketing/             kit de divulgação (LinkedIn, vídeos, apresentações)
 ```
 
 **A IA é flexível — local ou via chave de API.** Três backends selecionáveis na UI:
