@@ -2,6 +2,8 @@
 FROM python:3.12-slim
 
 WORKDIR /app
+# torch CPU-only primeiro (evita ~6GB de libs CUDA inúteis nesta VPS sem GPU)
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
 RUN pip install --no-cache-dir \
       fastapi==0.115.6 uvicorn==0.34.0 requests==2.32.3 pydantic==2.13.4 \
       numpy==1.26.4 faiss-cpu==1.8.0 sentence-transformers==3.0.1 \
