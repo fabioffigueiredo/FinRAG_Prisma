@@ -47,7 +47,7 @@ export function ContributionBars({
                 </motion.span>
               )}
 
-              <span className="relative flex w-32 shrink-0 items-center gap-2">
+              <span className="relative flex w-40 shrink-0 items-center gap-2">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: cor }} />
                 <span className={cn("truncate text-[13px] text-foreground", ativo && "font-medium")} title={e.nome}>
                   {e.nome}
