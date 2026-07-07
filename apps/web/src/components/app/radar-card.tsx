@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { motion } from "motion/react";
 import { Radar as RadarIcon, ArrowUpRight } from "lucide-react";
 import { getRadar, type RadarResp } from "@/lib/api";
 import { useFund } from "@/components/app/fund-context";
 import { SectionTitle } from "@/components/app/kpi";
+import { easeOutQuint } from "@/lib/motion";
 
 export function RadarCard() {
   const { codigo } = useFund();
@@ -20,7 +22,7 @@ export function RadarCard() {
   const linhas = Object.entries(radar.agregado).sort((a, b) => b[1].liquido - a[1].liquido);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="card-surface p-5">
       <div className="mb-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <RadarIcon className="h-4 w-4 text-primary" strokeWidth={1.75} />
@@ -38,18 +40,22 @@ export function RadarCard() {
         </p>
       )}
       <ul className="space-y-2">
-        {linhas.map(([estrategia, g]) => (
+        {linhas.map(([estrategia, g], i) => (
           <li key={estrategia} className="flex items-center gap-3">
             <span className="w-32 shrink-0 truncate text-[13px] text-foreground">{estrategia}</span>
             <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted/60">
               <span className="absolute inset-y-0 left-1/2 w-px bg-border" />
-              <span
+              <motion.span
                 className="absolute inset-y-0 rounded-full"
                 style={{
                   left: g.liquido >= 0 ? "50%" : `${50 + g.liquido * 50}%`,
                   width: `${Math.abs(g.liquido) * 50}%`,
                   backgroundColor: g.liquido >= 0 ? "var(--success)" : "var(--destructive)",
+                  transformOrigin: g.liquido >= 0 ? "left" : "right",
                 }}
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.6, ease: easeOutQuint, delay: 0.15 + i * 0.05 }}
               />
             </span>
             <span className="tabular w-20 shrink-0 text-right text-[12px] text-muted-foreground">

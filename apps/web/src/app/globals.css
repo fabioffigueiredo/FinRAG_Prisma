@@ -59,6 +59,11 @@
   --sidebar-ring: #f0b952;
 
   --font-display: var(--font-fraunces);
+
+  /* motion — curvas de desaceleração natural (nunca bounce/elastic) */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
@@ -154,9 +159,19 @@
     color: var(--foreground);
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    /*
+      Luz ambiente calma (ref. noctalia): glow de ouro difuso no topo com
+      falloff amplo + leve profundidade fria no rodapé + grão de filme sutil
+      (SVG noise em soft-light) que dá textura/profundidade sem virar ruído.
+    */
     background-image:
-      radial-gradient(60rem 60rem at 85% -10%, rgba(240, 185, 82, 0.06), transparent 60%),
-      radial-gradient(50rem 50rem at -10% 110%, rgba(94, 234, 212, 0.05), transparent 55%);
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.9'/%3E%3C/svg%3E"),
+      radial-gradient(52% 46% at 80% 8%, color-mix(in oklab, var(--primary) 16%, transparent) 0%, transparent 60%),
+      radial-gradient(46% 40% at 24% 84%, color-mix(in oklab, var(--primary) 8%, transparent) 0%, transparent 60%),
+      radial-gradient(135% 130% at 55% 44%, transparent 56%, rgba(0, 0, 0, 0.42) 100%);
+    background-size: 150px 150px, cover, cover, cover;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+    background-blend-mode: soft-light, normal, normal, normal;
     background-attachment: fixed;
   }
   .tabular {
@@ -165,5 +180,115 @@
   }
   .font-display {
     font-family: var(--font-display), Georgia, serif;
+  }
+}
+
+@layer utilities {
+  /* Entrada padrão: sobe + surge. Combinar com --i para stagger. */
+  @keyframes prisma-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .animate-rise {
+    animation: prisma-rise 0.5s var(--ease-out-quint) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+
+  /* Cursor de digitação para streaming do Copiloto */
+  @keyframes prisma-caret {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .prisma-caret::after {
+    content: "";
+    display: inline-block;
+    width: 0.5ch;
+    height: 1em;
+    margin-left: 1px;
+    vertical-align: -0.15em;
+    background-color: var(--primary);
+    border-radius: 1px;
+    animation: prisma-caret 1s steps(1) infinite;
+  }
+
+  /* Brilho de recuperação (loading do RAG) */
+  @keyframes prisma-shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  /* Draw-in de linha SVG (usar com pathLength="1") */
+  @keyframes prisma-draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+  }
+  .prisma-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: prisma-draw 1.1s var(--ease-out-quart) forwards;
+  }
+  @keyframes prisma-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .prisma-fade-in {
+    opacity: 0;
+    animation: prisma-fade-in 0.6s var(--ease-out-quart) 0.5s forwards;
+  }
+  @keyframes prisma-dot-pop {
+    0% { opacity: 0; transform: scale(0); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .prisma-dot-pop {
+    transform-box: fill-box;
+    transform-origin: center;
+    opacity: 0;
+    animation: prisma-dot-pop 0.4s var(--ease-out-quint) 1s forwards;
+  }
+}
+
+@layer components {
+  /*
+    Superfície de card padrão + hover leve (ref. antigravity): a borda acende
+    levemente para o ouro, um halo sutil surge e a superfície clareia de leve.
+    Substitui o antigo "rounded-xl border border-border bg-card".
+  */
+  .card-surface {
+    border-radius: calc(var(--radius) + 4px);
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    transition:
+      border-color 0.25s var(--ease-out-quart),
+      box-shadow 0.25s var(--ease-out-quart),
+      background-color 0.25s var(--ease-out-quart);
+  }
+  .card-surface:hover {
+    border-color: color-mix(in oklab, var(--primary) 22%, var(--border));
+    background-color: color-mix(in oklab, var(--card), white 2.5%);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 4%, transparent),
+      0 14px 44px -22px color-mix(in oklab, var(--primary) 28%, #000);
+  }
+}
+
+/* Acessibilidade: honrar prefers-reduced-motion em toda a aplicação */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-rise {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }

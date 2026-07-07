@@ -2,31 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Gauge, Layers, MessagesSquare, Radar, TriangleAlert, FileText, Upload, ScrollText } from "lucide-react";
+import { motion } from "motion/react";
 import { PrismaWordmark } from "@/components/brand/logo";
+import { CoreStatus } from "@/components/app/core-status";
+import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
-
-const NAV = [
-  { grupo: "Análise", itens: [
-    { href: "/", label: "Cockpit", icon: Gauge },
-    { href: "/atribuicao", label: "Atribuição", icon: Layers },
-    { href: "/copiloto", label: "Pergunte ao Prisma", icon: MessagesSquare },
-    { href: "/radar", label: "Radar de Mercado", icon: Radar },
-    { href: "/sinais", label: "Sinais", icon: TriangleAlert },
-  ]},
-  { grupo: "Saídas", itens: [
-    { href: "/relatorio", label: "Relatório", icon: FileText },
-    { href: "/auditoria", label: "Auditoria", icon: ScrollText },
-    { href: "/standalone", label: "Modo standalone", icon: Upload },
-  ]},
-];
+import { easeOutQuint } from "@/lib/motion";
 
 export function Sidebar() {
   const path = usePathname();
+  // índice global para escalonar a entrada de todos os itens de nav
+  let idx = 0;
   return (
     <aside className="hidden w-[248px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex h-16 items-center px-5">
-        <Link href="/" aria-label="Prisma — início">
+        <Link href="/" aria-label="Prisma — início" className="transition-opacity hover:opacity-80">
           <PrismaWordmark />
         </Link>
       </div>
@@ -41,27 +31,45 @@ export function Sidebar() {
               {sec.itens.map((item) => {
                 const active = path === item.href;
                 const Icon = item.icon;
+                const i = idx++;
                 return (
-                  <li key={item.href}>
+                  <motion.li
+                    key={item.href}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4, ease: easeOutQuint, delay: i * 0.04 }}
+                  >
                     <Link
                       href={item.href}
+                      aria-current={active ? "page" : undefined}
                       className={cn(
-                        "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-150",
+                        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200",
                         active
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          ? "text-sidebar-accent-foreground"
                           : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                       )}
                     >
+                      {active && (
+                        <motion.span
+                          layoutId="nav-active"
+                          className="absolute inset-0 -z-10 rounded-lg bg-sidebar-accent"
+                          transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                        >
+                          <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary" />
+                        </motion.span>
+                      )}
                       <Icon
                         className={cn(
-                          "h-[18px] w-[18px] transition-colors",
-                          active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+                          "h-[18px] w-[18px] shrink-0 transition-[color,transform] duration-200 group-active:scale-90",
+                          active
+                            ? "text-primary"
+                            : "text-muted-foreground group-hover:text-foreground group-hover:-translate-y-px",
                         )}
                         strokeWidth={1.75}
                       />
                       {item.label}
                     </Link>
-                  </li>
+                  </motion.li>
                 );
               })}
             </ul>
@@ -70,16 +78,7 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-sidebar-border p-4">
-        <div className="flex items-center gap-2.5 rounded-lg bg-sidebar-accent/40 px-3 py-2.5">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--success)] opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--success)]" />
-          </span>
-          <div className="leading-tight">
-            <p className="text-xs font-medium text-foreground">Núcleo cognitivo ativo</p>
-            <p className="text-[10px] text-muted-foreground">RAG + guardrail · auditável</p>
-          </div>
-        </div>
+        <CoreStatus />
       </div>
     </aside>
   );
