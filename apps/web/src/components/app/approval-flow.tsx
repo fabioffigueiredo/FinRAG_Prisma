@@ -117,6 +117,7 @@ export function ApprovalFlow() {
               </Button>
               <Button
                 size="lg"
+                onClick={() => window.print()}
                 className="bg-[var(--success)]/15 text-[var(--success)] hover:bg-[var(--success)]/25"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={2} /> Exportar PDF

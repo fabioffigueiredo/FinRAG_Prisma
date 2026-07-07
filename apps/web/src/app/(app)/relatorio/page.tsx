@@ -25,8 +25,8 @@ export default function RelatorioPage() {
         <ApprovalFlow />
       </Item>
 
-      {/* pré-visualização estilo documento */}
-      <Item className="card-surface p-8">
+      {/* pré-visualização estilo documento (área impressa no Exportar PDF) */}
+      <Item className="print-area card-surface p-8">
         <div className="border-b border-border pb-4">
           <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             Comentário de performance
