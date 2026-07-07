@@ -31,3 +31,5 @@ marketing/video/node_modules/
 
 # Build de producao Next (nao versionar)
 apps/web/.next/
+.impeccable/
+marketing/
