@@ -82,24 +82,32 @@ export function Waterfall({
                 </div>
               </div>
               <div className="relative min-h-0 flex-1">
-                <motion.div
-                  className={cn(
-                    "absolute left-1/2 -translate-x-1/2 rounded-md",
-                    s.total ? "w-[62%] ring-1 ring-inset ring-primary/60" : "w-[56%]",
-                  )}
-                  style={{
-                    bottom: `${bottom}%`,
-                    height: `${height}%`,
-                    backgroundColor: s.cor,
-                    transformOrigin: negativo ? "top" : "bottom",
-                    boxShadow: s.total
-                      ? "0 0 30px -8px color-mix(in oklab, var(--primary) 70%, transparent)"
-                      : undefined,
-                  }}
-                  initial={{ scaleY: 0, opacity: 0 }}
-                  animate={{ scaleY: 1, opacity: s.total ? 1 : 0.9 }}
-                  transition={{ duration: 0.5, ease: easeOutQuint, delay: 0.12 + i * 0.07 }}
-                />
+                {s.total ? (
+                  // Barra do resultado (herói): sempre visível, sem depender da
+                  // animação de entrada (o scaleY estava deixando-a colapsada).
+                  <div
+                    className="absolute left-1/2 w-[62%] -translate-x-1/2 rounded-md ring-1 ring-inset ring-primary/70"
+                    style={{
+                      bottom: `${bottom}%`,
+                      height: `${height}%`,
+                      backgroundColor: s.cor,
+                      boxShadow: "0 0 30px -8px color-mix(in oklab, var(--primary) 70%, transparent)",
+                    }}
+                  />
+                ) : (
+                  <motion.div
+                    className="absolute left-1/2 w-[56%] -translate-x-1/2 rounded-md"
+                    style={{
+                      bottom: `${bottom}%`,
+                      height: `${height}%`,
+                      backgroundColor: s.cor,
+                      transformOrigin: negativo ? "top" : "bottom",
+                    }}
+                    initial={{ scaleY: 0, opacity: 0 }}
+                    animate={{ scaleY: 1, opacity: 0.9 }}
+                    transition={{ duration: 0.5, ease: easeOutQuint, delay: 0.12 + i * 0.07 }}
+                  />
+                )}
               </div>
             </div>
           );
