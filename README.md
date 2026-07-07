@@ -55,7 +55,9 @@ poucas linhas — incluindo o modelo homologado do seu ambiente corporativo.
 
 ## 🎥 Tutorial em vídeo
 
-Passo a passo de todas as telas (~2 min): [`docs/media/tutorial.mp4`](docs/media/tutorial.mp4)
+[![Tutorial do Prisma](https://img.youtube.com/vi/AXIaKuO7Yrc/maxresdefault.jpg)](https://www.youtube.com/watch?v=AXIaKuO7Yrc)
+
+Passo a passo de todas as telas (~2 min) — clique na imagem para assistir no YouTube.
 
 ## 📐 Qualidade & governança
 
