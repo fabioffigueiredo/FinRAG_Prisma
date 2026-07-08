@@ -297,6 +297,14 @@
   }
 }
 
+/* Exportar PDF do Relatório: margens A4 + fundo branco.
+   O que aparece/some na impressão é controlado por variantes `print:` do Tailwind
+   nos componentes (o Lightning CSS do Tailwind v4 remove regras @media print cruas). */
+@page {
+  size: A4;
+  margin: 1.6cm;
+}
+
 /* Acessibilidade: honrar prefers-reduced-motion em toda a aplicação */
 @media (prefers-reduced-motion: reduce) {
   *,
