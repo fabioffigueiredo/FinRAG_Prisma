@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { popover } from "@/lib/motion";
 import { BACKENDS, useBackend } from "@/components/app/backend-context";
 import { MobileNav } from "@/components/app/mobile-nav";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 
 export function Topbar() {
   const { backend, setBackend } = useBackend();
@@ -91,6 +92,7 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         <span className="hidden text-[11px] uppercase tracking-wide text-muted-foreground sm:inline">
           Motor
         </span>

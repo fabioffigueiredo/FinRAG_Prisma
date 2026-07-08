@@ -1,30 +1,59 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { PrismaWordmark } from "@/components/brand/logo";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PrismaWordmark, PrismaMark } from "@/components/brand/logo";
 import { CoreStatus } from "@/components/app/core-status";
 import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { easeOutQuint } from "@/lib/motion";
 
+const STORE_KEY = "prisma:sidebar-collapsed";
+
 export function Sidebar() {
   const path = usePathname();
-  // índice global para escalonar a entrada de todos os itens de nav
+  const [collapsed, setCollapsed] = useState(false);
+
+  // estado persistido (lido no cliente p/ evitar mismatch de hidratação)
+  useEffect(() => {
+    setCollapsed(localStorage.getItem(STORE_KEY) === "1");
+  }, []);
+  const toggle = () => {
+    setCollapsed((v) => {
+      const nv = !v;
+      localStorage.setItem(STORE_KEY, nv ? "1" : "0");
+      return nv;
+    });
+  };
+
   let idx = 0;
   return (
-    <aside className="hidden w-[248px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-      <div className="flex h-16 items-center px-5">
+    <aside
+      data-collapsed={collapsed}
+      className={cn(
+        "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-300 md:flex",
+        collapsed ? "w-[72px]" : "w-[248px]",
+      )}
+      style={{ transitionTimingFunction: "var(--ease-out-quint)" }}
+    >
+      <div className={cn("flex h-16 items-center", collapsed ? "justify-center px-0" : "px-5")}>
         <Link href="/" aria-label="Prisma — início" className="transition-opacity hover:opacity-80">
-          <PrismaWordmark />
+          {collapsed ? <PrismaMark /> : <PrismaWordmark />}
         </Link>
       </div>
 
       <nav className="flex-1 space-y-6 px-3 py-4">
         {NAV.map((sec) => (
           <div key={sec.grupo}>
-            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+            <p
+              className={cn(
+                "px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70 transition-opacity",
+                collapsed && "pointer-events-none h-0 select-none overflow-hidden pb-0 opacity-0",
+              )}
+            >
               {sec.grupo}
             </p>
             <ul className="space-y-1">
@@ -41,9 +70,11 @@ export function Sidebar() {
                   >
                     <Link
                       href={item.href}
+                      title={collapsed ? item.label : undefined}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200",
+                        "group relative flex items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-200",
+                        collapsed ? "justify-center px-0" : "px-3",
                         active
                           ? "text-sidebar-accent-foreground"
                           : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
@@ -67,7 +98,7 @@ export function Sidebar() {
                         )}
                         strokeWidth={1.75}
                       />
-                      {item.label}
+                      <span className={cn("truncate", collapsed && "hidden")}>{item.label}</span>
                     </Link>
                   </motion.li>
                 );
@@ -77,8 +108,29 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-sidebar-border p-4">
-        <CoreStatus />
+      <div className={cn("border-t border-sidebar-border", collapsed ? "flex justify-center p-3" : "p-4")}>
+        <CoreStatus collapsed={collapsed} />
+      </div>
+
+      <div className="border-t border-sidebar-border p-2">
+        <button
+          onClick={toggle}
+          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground",
+            collapsed && "justify-center px-0",
+          )}
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          ) : (
+            <>
+              <PanelLeftClose className="h-[18px] w-[18px]" strokeWidth={1.75} />
+              <span>Recolher</span>
+            </>
+          )}
+        </button>
       </div>
     </aside>
   );
