@@ -34,15 +34,30 @@ export function Sidebar() {
     <aside
       data-collapsed={collapsed}
       className={cn(
-        "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-300 md:flex",
+        "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-300 md:flex print:!hidden",
         collapsed ? "w-[72px]" : "w-[248px]",
       )}
       style={{ transitionTimingFunction: "var(--ease-out-quint)" }}
     >
-      <div className={cn("flex h-16 items-center", collapsed ? "justify-center px-0" : "px-5")}>
-        <Link href="/" aria-label="Prisma — início" className="transition-opacity hover:opacity-80">
-          {collapsed ? <PrismaMark /> : <PrismaWordmark />}
-        </Link>
+      <div className={cn("flex h-16 items-center gap-2", collapsed ? "justify-center px-0" : "px-4")}>
+        {!collapsed && (
+          <Link href="/" aria-label="Prisma — início" className="mr-auto transition-opacity hover:opacity-80">
+            <PrismaWordmark />
+          </Link>
+        )}
+        <button
+          onClick={toggle}
+          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-[19px] w-[19px]" strokeWidth={1.75} />
+          ) : (
+            <PanelLeftClose className="h-[19px] w-[19px]" strokeWidth={1.75} />
+          )}
+        </button>
       </div>
 
       <nav className="flex-1 space-y-6 px-3 py-4">
@@ -110,27 +125,6 @@ export function Sidebar() {
 
       <div className={cn("border-t border-sidebar-border", collapsed ? "flex justify-center p-3" : "p-4")}>
         <CoreStatus collapsed={collapsed} />
-      </div>
-
-      <div className="border-t border-sidebar-border p-2">
-        <button
-          onClick={toggle}
-          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-          title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className={cn(
-            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground",
-            collapsed && "justify-center px-0",
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={1.75} />
-          ) : (
-            <>
-              <PanelLeftClose className="h-[18px] w-[18px]" strokeWidth={1.75} />
-              <span>Recolher</span>
-            </>
-          )}
-        </button>
       </div>
     </aside>
   );

@@ -17,7 +17,7 @@ export function Topbar() {
   const [aberto, setAberto] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b border-border bg-background/70 px-3 backdrop-blur-xl sm:gap-4 md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b border-border bg-background/70 px-3 backdrop-blur-xl sm:gap-4 md:px-6 print:hidden">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <MobileNav />
 
