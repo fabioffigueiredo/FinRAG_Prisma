@@ -27,3 +27,28 @@ RESPOSTA_ESCOPO = (
 
 def pede_recomendacao(texto: str) -> bool:
     return bool(_RX.search(texto or ""))
+
+
+# Guardrail de injeção/vazamento na PERGUNTA do usuário (além do de documentos).
+_PADROES_INJECAO = [
+    r"ignore?\s+(as\s+)?(instru[cç][oõ]es|regras)",
+    r"desconsidere\s+(as\s+)?(instru[cç][oõ]es|regras)",
+    r"esque[cç]a\s+(as\s+)?(instru[cç][oõ]es|regras)",
+    r"instru[cç][oõ]es\s+anteriores",
+    r"(revele|mostre|imprima|repita|exiba)\s+.{0,20}(prompt|instru[cç][oõ]es|regras|sistema)",
+    r"prompt\s+do\s+sistema",
+    r"system\s+prompt",
+    r"aja\s+como|finja\s+ser|voc[eê]\s+agora\s+[eé]",
+    r"jailbreak|dev\s*mode|modo\s+desenvolvedor",
+]
+_RX_INJ = re.compile("|".join(_PADROES_INJECAO), re.IGNORECASE)
+
+RESPOSTA_INJECAO = (
+    "Essa solicitação foi bloqueada pelo guardrail: não revelo instruções de "
+    "sistema nem altero meu escopo. Sigo explicando o resultado do fundo com "
+    "base nas fontes citadas. Reformule perguntando sobre o desempenho observado."
+)
+
+
+def tenta_injecao(texto: str) -> bool:
+    return bool(_RX_INJ.search(texto or ""))
