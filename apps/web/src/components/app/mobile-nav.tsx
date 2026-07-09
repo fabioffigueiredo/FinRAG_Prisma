@@ -7,6 +7,7 @@ import { Menu } from "lucide-react";
 import { Sheet, SheetTrigger, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { PrismaWordmark } from "@/components/brand/logo";
 import { CoreStatus } from "@/components/app/core-status";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,13 @@ export function MobileNav() {
           </Link>
         </div>
         <SheetTitle className="sr-only">Navegação</SheetTitle>
+
+        <div className="mx-3 mb-1 flex items-center justify-between rounded-lg border border-sidebar-border px-3 py-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+            Tema
+          </span>
+          <ThemeToggle />
+        </div>
 
         <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-2">
           {NAV.map((sec) => (

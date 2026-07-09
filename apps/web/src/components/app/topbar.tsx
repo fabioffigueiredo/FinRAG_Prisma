@@ -92,7 +92,9 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-3">
-        <ThemeToggle />
+        <div className="hidden sm:block">
+          <ThemeToggle />
+        </div>
         <span className="hidden text-[11px] uppercase tracking-wide text-muted-foreground sm:inline">
           Motor
         </span>
