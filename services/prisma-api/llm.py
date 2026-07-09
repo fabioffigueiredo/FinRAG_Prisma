@@ -59,7 +59,17 @@ def get_backend(name: str):
         from finrag.models import get_llm  # reuso do núcleo FinRAG
         # modelo de nuvem mais capaz p/ testers externos (cai em MockLLM sem chave)
         modelo = os.environ.get("PRISMA_GROQ_MODEL", "llama-3.3-70b-versatile")
-        return get_llm("groq", model=modelo)
+        return get_llm(
+            "groq",
+            model=modelo,
+            # sem GROQ_API_KEY, cai neste texto (não em "{}") para a demo não sair vazia
+            scripted=(
+                "No período, o resultado do fundo foi sustentado principalmente pelo "
+                "carrego das estratégias de Crédito Privado e Juros Brasil, com contribuição "
+                "adicional de Bolsa Brasil; Custos e Despesas subtraíram do total. "
+                "(Resposta de demonstração — configure GROQ_API_KEY para o modelo de nuvem.)"
+            ),
+        )
     if name in ("mock", "demo"):
         from finrag.models import MockLLM
         return MockLLM(
