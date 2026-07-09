@@ -7,10 +7,14 @@ respeitam o mesmo protocolo LLMClient.generate(prompt, *, temperature, max_token
 from __future__ import annotations
 
 import os
+import re
 import requests
 
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("PRISMA_OLLAMA_MODEL", "llama3.1:8b")
+# Modelo local capaz e já disponível na máquina do demo (Qwen3 8B).
+OLLAMA_MODEL = os.environ.get("PRISMA_OLLAMA_MODEL", "qwen3:8b")
+
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
 class OllamaClient:
@@ -22,17 +26,21 @@ class OllamaClient:
 
     def generate(self, prompt: str, *, temperature: float = 0.0, max_tokens: int = 512) -> str:
         resp = requests.post(
-            f"{self.base}/v1/chat/completions",
+            f"{self.base}/api/chat",
             json={
                 "model": self.model,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "messages": [{"role": "user", "content": prompt}],
+                # desliga o "thinking" do Qwen3 p/ saída limpa e mais rápida na demo
+                "think": False,
+                "stream": False,
+                "options": {"temperature": temperature, "num_predict": max_tokens},
+                "messages": [{"role": "user", "content": prompt + " /no_think"}],
             },
-            timeout=120,
+            timeout=180,
         )
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        conteudo = resp.json().get("message", {}).get("content", "")
+        # remove qualquer bloco de raciocínio residual
+        return _THINK_RE.sub("", conteudo).strip()
 
     def warmup(self) -> None:
         """Pré-aquece o modelo (evita cold-load na demo ao vivo)."""
@@ -49,7 +57,19 @@ def get_backend(name: str):
         return OllamaClient()
     if name == "groq":
         from finrag.models import get_llm  # reuso do núcleo FinRAG
-        return get_llm("groq")  # cai em MockLLM se não houver GROQ_API_KEY
+        # modelo de nuvem mais capaz p/ testers externos (cai em MockLLM sem chave)
+        modelo = os.environ.get("PRISMA_GROQ_MODEL", "llama-3.3-70b-versatile")
+        return get_llm(
+            "groq",
+            model=modelo,
+            # sem GROQ_API_KEY, cai neste texto (não em "{}") para a demo não sair vazia
+            scripted=(
+                "No período, o resultado do fundo foi sustentado principalmente pelo "
+                "carrego das estratégias de Crédito Privado e Juros Brasil, com contribuição "
+                "adicional de Bolsa Brasil; Custos e Despesas subtraíram do total. "
+                "(Resposta de demonstração — configure GROQ_API_KEY para o modelo de nuvem.)"
+            ),
+        )
     if name in ("mock", "demo"):
         from finrag.models import MockLLM
         return MockLLM(

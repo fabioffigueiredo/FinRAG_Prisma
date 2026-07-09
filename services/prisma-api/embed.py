@@ -11,7 +11,8 @@ import numpy as np
 import requests
 
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
-EMBED_MODEL = os.environ.get("PRISMA_EMBED_MODEL", "bge-m3:567m")
+# Modelo de embedding já instalado na máquina do demo (Qwen3-Embedding 0.6B).
+EMBED_MODEL = os.environ.get("PRISMA_EMBED_MODEL", "qwen3-embedding:0.6b")
 
 
 def _embed_one(text: str) -> list[float]:
