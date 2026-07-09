@@ -31,7 +31,9 @@ from finrag.rag import build_augmented_prompt            # noqa: E402
 
 from llm import get_backend, ollama_disponivel, OllamaClient  # noqa: E402
 from embed import get_embed_fn                                # noqa: E402
-from escopo import pede_recomendacao, INSTRUCAO_ESCOPO, RESPOSTA_ESCOPO  # noqa: E402
+from escopo import (  # noqa: E402
+    pede_recomendacao, tenta_injecao, INSTRUCAO_ESCOPO, RESPOSTA_ESCOPO, RESPOSTA_INJECAO,
+)
 import audit                                                             # noqa: E402
 from radar import carregar_noticias, agregar                             # noqa: E402
 from sinais import gerar_sinais, AVISO_LEGAL, MODELO_VERSAO              # noqa: E402
@@ -79,8 +81,9 @@ def _corpus_docs():
 
 @app.on_event("startup")
 def _startup() -> None:
+    import embed as _embed
     embed_fn = get_embed_fn()
-    STATE["embed"] = "bge-m3 (Ollama)" if embed_fn else "sentence-transformers (fallback)"
+    STATE["embed"] = f"{_embed.EMBED_MODEL} (Ollama)" if embed_fn else "sentence-transformers (fallback)"
     idx = SemanticIndex(embed_fn=embed_fn) if embed_fn else SemanticIndex()
     idx.build(chunk_corpus(_corpus_docs()))
     STATE["index"] = idx
@@ -214,6 +217,15 @@ def narrativa(req: NarrativaReq):
 @app.post("/perguntar")
 def perguntar(req: PerguntaReq):
     t0 = time.perf_counter()
+    if tenta_injecao(req.pergunta):
+        audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
+                        backend=req.backend, latency_ms=0, fontes=[],
+                        bloqueados=["(pergunta) injeção/vazamento"], resposta=RESPOSTA_INJECAO,
+                        extra={"injecao": True})
+        return {"resposta": RESPOSTA_INJECAO, "citacoes": [],
+                "bloqueados": [{"fonte": "pergunta do usuário",
+                                "motivo": "tentativa de injeção/vazamento de prompt"}],
+                "backend": req.backend, "latency_ms": 0, "injecao": True}
     if pede_recomendacao(req.pergunta):
         audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
                         backend=req.backend, latency_ms=0, fontes=[], bloqueados=[],
