@@ -11,8 +11,36 @@ backend Ollama (local) e embeddings bge-m3.
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
+
+
+def _load_env() -> None:
+    """Carrega variáveis de .env (sem depender de python-dotenv) para a demo/VPS
+    ficarem turnkey. Procura em: prisma-api/, raiz do prisma/ e raiz do PD1/.
+    Só define chaves ainda não presentes no ambiente."""
+    here = Path(__file__).resolve()
+    candidatos = [
+        here.parent / ".env",
+        here.parents[2] / ".env",
+        here.parents[3] / "PD1" / ".env",
+    ]
+    for env in candidatos:
+        if not env.is_file():
+            continue
+        for linha in env.read_text(encoding="utf-8").splitlines():
+            linha = linha.strip()
+            if not linha or linha.startswith("#") or "=" not in linha:
+                continue
+            chave, _, valor = linha.partition("=")
+            chave = chave.strip()
+            valor = valor.strip().strip('"').strip("'")
+            if chave and chave not in os.environ:
+                os.environ[chave] = valor
+
+
+_load_env()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,7 +59,9 @@ from finrag.rag import build_augmented_prompt            # noqa: E402
 
 from llm import get_backend, ollama_disponivel, OllamaClient  # noqa: E402
 from embed import get_embed_fn                                # noqa: E402
-from escopo import pede_recomendacao, INSTRUCAO_ESCOPO, RESPOSTA_ESCOPO  # noqa: E402
+from escopo import (  # noqa: E402
+    pede_recomendacao, tenta_injecao, INSTRUCAO_ESCOPO, RESPOSTA_ESCOPO, RESPOSTA_INJECAO,
+)
 import audit                                                             # noqa: E402
 from radar import carregar_noticias, agregar                             # noqa: E402
 from sinais import gerar_sinais, AVISO_LEGAL, MODELO_VERSAO              # noqa: E402
@@ -79,8 +109,9 @@ def _corpus_docs():
 
 @app.on_event("startup")
 def _startup() -> None:
+    import embed as _embed
     embed_fn = get_embed_fn()
-    STATE["embed"] = "bge-m3 (Ollama)" if embed_fn else "sentence-transformers (fallback)"
+    STATE["embed"] = f"{_embed.EMBED_MODEL} (Ollama)" if embed_fn else "sentence-transformers (fallback)"
     idx = SemanticIndex(embed_fn=embed_fn) if embed_fn else SemanticIndex()
     idx.build(chunk_corpus(_corpus_docs()))
     STATE["index"] = idx
@@ -214,6 +245,15 @@ def narrativa(req: NarrativaReq):
 @app.post("/perguntar")
 def perguntar(req: PerguntaReq):
     t0 = time.perf_counter()
+    if tenta_injecao(req.pergunta):
+        audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
+                        backend=req.backend, latency_ms=0, fontes=[],
+                        bloqueados=["(pergunta) injeção/vazamento"], resposta=RESPOSTA_INJECAO,
+                        extra={"injecao": True})
+        return {"resposta": RESPOSTA_INJECAO, "citacoes": [],
+                "bloqueados": [{"fonte": "pergunta do usuário",
+                                "motivo": "tentativa de injeção/vazamento de prompt"}],
+                "backend": req.backend, "latency_ms": 0, "injecao": True}
     if pede_recomendacao(req.pergunta):
         audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
                         backend=req.backend, latency_ms=0, fontes=[], bloqueados=[],

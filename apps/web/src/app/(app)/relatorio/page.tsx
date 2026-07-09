@@ -12,7 +12,7 @@ export default function RelatorioPage() {
   const r = fundo.resumo;
   return (
     <PageStagger className="mx-auto max-w-4xl space-y-6">
-      <Item className="flex items-end justify-between">
+      <Item className="flex items-end justify-between print:hidden">
         <div>
           <h1 className="font-display text-2xl font-semibold text-foreground">Relatório</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -21,12 +21,12 @@ export default function RelatorioPage() {
         </div>
       </Item>
 
-      <Item>
+      <Item className="print:hidden">
         <ApprovalFlow />
       </Item>
 
       {/* pré-visualização estilo documento */}
-      <Item className="card-surface p-8">
+      <Item className="print-area card-surface p-8 print:border-0 print:p-0 print:shadow-none">
         <div className="border-b border-border pb-4">
           <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             Comentário de performance

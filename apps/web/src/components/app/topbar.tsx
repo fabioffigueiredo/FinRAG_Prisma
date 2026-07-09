@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { popover } from "@/lib/motion";
 import { BACKENDS, useBackend } from "@/components/app/backend-context";
 import { MobileNav } from "@/components/app/mobile-nav";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 
 export function Topbar() {
   const { backend, setBackend } = useBackend();
@@ -16,7 +17,7 @@ export function Topbar() {
   const [aberto, setAberto] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b border-border bg-background/70 px-3 backdrop-blur-xl sm:gap-4 md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b border-border bg-background/70 px-3 backdrop-blur-xl sm:gap-4 md:px-6 print:hidden">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <MobileNav />
 
@@ -91,6 +92,7 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         <span className="hidden text-[11px] uppercase tracking-wide text-muted-foreground sm:inline">
           Motor
         </span>

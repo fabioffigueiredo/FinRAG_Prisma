@@ -10,55 +10,58 @@
   Produto dark-first; tokens semânticos (nada de hex cru nos componentes).
 */
 :root {
-  --radius: 0.75rem;
+  /* Stitch "Corporate Modernism": raios suaves (4px componentes / 8px containers) */
+  --radius: 0.5rem;
 
-  /* superfícies (ink) */
-  --background: #070a11;
-  --foreground: #f3eee3;
-  --card: #0e1320;
-  --card-foreground: #f3eee3;
-  --popover: #121826;
-  --popover-foreground: #f3eee3;
+  /* superfícies — claro institucional */
+  --background: #f4f5f7;
+  --foreground: #1a1c1c;
+  --card: #ffffff;
+  --card-foreground: #1a1c1c;
+  --popover: #ffffff;
+  --popover-foreground: #1a1c1c;
 
-  /* marca: ouro */
-  --primary: #f0b952;
-  --primary-foreground: #1a1204;
+  /* marca: navy institucional */
+  --primary: #003366;
+  --primary-foreground: #ffffff;
 
-  --secondary: #18202f;
-  --secondary-foreground: #f3eee3;
-  --muted: #141a27;
-  --muted-foreground: #9aa1b0;
-  --accent: #1b2333;
-  --accent-foreground: #f7e7c4;
+  --secondary: #eceff3;
+  --secondary-foreground: #003366;
+  --muted: #f1f3f6;
+  --muted-foreground: #5b616e;
+  --accent: #eaf0f7;
+  --accent-foreground: #003366;
 
-  /* estados */
-  --destructive: #fb7185; /* coral = risco/negativo */
-  --destructive-foreground: #1a0508;
-  --success: #5eead4;     /* menta = positivo */
-  --success-foreground: #04201b;
+  /* estados — verde/vermelho financeiro + amarelo de acento */
+  --destructive: #ba1a1a;
+  --destructive-foreground: #ffffff;
+  --success: #0a7f52;
+  --success-foreground: #ffffff;
+  --warning: #fdb913;
+  --warning-foreground: #1a1204;
 
-  --border: rgba(232, 224, 208, 0.1);
-  --input: rgba(232, 224, 208, 0.14);
-  --ring: #f0b952;
+  --border: #e2e5ea;
+  --input: #d6dae1;
+  --ring: #fdb913;
 
   /* charts */
-  --chart-1: #f0b952; /* ouro */
-  --chart-2: #5b8def; /* azul dado */
-  --chart-3: #5eead4; /* menta */
-  --chart-4: #c4a6ff; /* violeta */
-  --chart-5: #f4c26b; /* âmbar */
+  --chart-1: #14b8a6; /* teal */
+  --chart-2: #8b5cf6; /* violeta */
+  --chart-3: #3b82f6; /* azul */
+  --chart-4: #f59e0b; /* âmbar */
+  --chart-5: #64748b; /* ardósia */
 
   /* sidebar */
-  --sidebar: #0a0e17;
-  --sidebar-foreground: #c9cedd;
-  --sidebar-primary: #f0b952;
-  --sidebar-primary-foreground: #1a1204;
-  --sidebar-accent: #18202f;
-  --sidebar-accent-foreground: #f7e7c4;
-  --sidebar-border: rgba(232, 224, 208, 0.08);
-  --sidebar-ring: #f0b952;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #43474f;
+  --sidebar-primary: #003366;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eaf0f7;
+  --sidebar-accent-foreground: #003366;
+  --sidebar-border: #e6e8ec;
+  --sidebar-ring: #fdb913;
 
-  --font-display: var(--font-fraunces);
+  --font-display: var(--font-geist-sans);
 
   /* motion — curvas de desaceleração natural (nunca bounce/elastic) */
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
@@ -67,40 +70,43 @@
 }
 
 .dark {
-  --background: #070a11;
-  --foreground: #f3eee3;
-  --card: #0e1320;
-  --card-foreground: #f3eee3;
-  --popover: #121826;
-  --popover-foreground: #f3eee3;
-  --primary: #f0b952;
-  --primary-foreground: #1a1204;
-  --secondary: #18202f;
-  --secondary-foreground: #f3eee3;
-  --muted: #141a27;
-  --muted-foreground: #9aa1b0;
-  --accent: #1b2333;
-  --accent-foreground: #f7e7c4;
+  /* Stitch dark: navy profundo + teal como acento vivo */
+  --background: #0a1120;
+  --foreground: #e7eefb;
+  --card: #101a2e;
+  --card-foreground: #e7eefb;
+  --popover: #13203a;
+  --popover-foreground: #e7eefb;
+  --primary: #2dd4bf;
+  --primary-foreground: #04201b;
+  --secondary: #17233b;
+  --secondary-foreground: #e7eefb;
+  --muted: #141f33;
+  --muted-foreground: #93a1bb;
+  --accent: #17273f;
+  --accent-foreground: #7de3d4;
   --destructive: #fb7185;
   --destructive-foreground: #1a0508;
-  --success: #5eead4;
+  --success: #34d399;
   --success-foreground: #04201b;
-  --border: rgba(232, 224, 208, 0.1);
-  --input: rgba(232, 224, 208, 0.14);
-  --ring: #f0b952;
-  --chart-1: #f0b952;
-  --chart-2: #5b8def;
-  --chart-3: #5eead4;
-  --chart-4: #c4a6ff;
-  --chart-5: #f4c26b;
-  --sidebar: #0a0e17;
-  --sidebar-foreground: #c9cedd;
-  --sidebar-primary: #f0b952;
-  --sidebar-primary-foreground: #1a1204;
-  --sidebar-accent: #18202f;
-  --sidebar-accent-foreground: #f7e7c4;
-  --sidebar-border: rgba(232, 224, 208, 0.08);
-  --sidebar-ring: #f0b952;
+  --warning: #fdb913;
+  --warning-foreground: #1a1204;
+  --border: rgba(159, 183, 222, 0.14);
+  --input: rgba(159, 183, 222, 0.18);
+  --ring: #2dd4bf;
+  --chart-1: #2dd4bf;
+  --chart-2: #a78bfa;
+  --chart-3: #60a5fa;
+  --chart-4: #fbbf24;
+  --chart-5: #94a3b8;
+  --sidebar: #0b1424;
+  --sidebar-foreground: #b9c5db;
+  --sidebar-primary: #2dd4bf;
+  --sidebar-primary-foreground: #04201b;
+  --sidebar-accent: #17273f;
+  --sidebar-accent-foreground: #7de3d4;
+  --sidebar-border: rgba(159, 183, 222, 0.1);
+  --sidebar-ring: #2dd4bf;
 }
 
 @theme inline {
@@ -122,6 +128,8 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -159,14 +167,21 @@
     color: var(--foreground);
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    /*
-      Luz ambiente calma (ref. noctalia): glow de ouro difuso no topo com
-      falloff amplo + leve profundidade fria no rodapé + grão de filme sutil
-      (SVG noise em soft-light) que dá textura/profundidade sem virar ruído.
-    */
+  }
+  /*
+    Claro (Stitch Corporate Modernism): superfície plana, sem glow. Apenas uma
+    profundidade fria muito sutil no rodapé para não achatar a página.
+  */
+  :root body {
+    background-image:
+      radial-gradient(60% 50% at 82% 4%, color-mix(in oklab, var(--primary) 4%, transparent) 0%, transparent 60%);
+    background-attachment: fixed;
+  }
+  /* Escuro (teal): glow difuso + grão de filme, mantendo a pegada editorial. */
+  .dark body {
     background-image:
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.9'/%3E%3C/svg%3E"),
-      radial-gradient(52% 46% at 80% 8%, color-mix(in oklab, var(--primary) 16%, transparent) 0%, transparent 60%),
+      radial-gradient(52% 46% at 80% 8%, color-mix(in oklab, var(--primary) 14%, transparent) 0%, transparent 60%),
       radial-gradient(46% 40% at 24% 84%, color-mix(in oklab, var(--primary) 8%, transparent) 0%, transparent 60%),
       radial-gradient(135% 130% at 55% 44%, transparent 56%, rgba(0, 0, 0, 0.42) 100%);
     background-size: 150px 150px, cover, cover, cover;
@@ -259,7 +274,7 @@
     Substitui o antigo "rounded-xl border border-border bg-card".
   */
   .card-surface {
-    border-radius: calc(var(--radius) + 4px);
+    border-radius: var(--radius);
     border: 1px solid var(--border);
     background-color: var(--card);
     transition:
@@ -267,13 +282,27 @@
       box-shadow 0.25s var(--ease-out-quart),
       background-color 0.25s var(--ease-out-quart);
   }
-  .card-surface:hover {
-    border-color: color-mix(in oklab, var(--primary) 22%, var(--border));
+  /* Claro: flat institucional — hover apenas realça a borda e uma sombra mínima. */
+  :root .card-surface:hover {
+    border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px -18px rgba(16, 24, 40, 0.25);
+  }
+  /* Escuro: mantém o halo teal sutil. */
+  .dark .card-surface:hover {
+    border-color: color-mix(in oklab, var(--primary) 24%, var(--border));
     background-color: color-mix(in oklab, var(--card), white 2.5%);
     box-shadow:
       inset 0 1px 0 color-mix(in oklab, white 4%, transparent),
-      0 14px 44px -22px color-mix(in oklab, var(--primary) 28%, #000);
+      0 14px 44px -22px color-mix(in oklab, var(--primary) 26%, #000);
   }
+}
+
+/* Exportar PDF do Relatório: margens A4 + fundo branco.
+   O que aparece/some na impressão é controlado por variantes `print:` do Tailwind
+   nos componentes (o Lightning CSS do Tailwind v4 remove regras @media print cruas). */
+@page {
+  size: A4;
+  margin: 1.6cm;
 }
 
 /* Acessibilidade: honrar prefers-reduced-motion em toda a aplicação */

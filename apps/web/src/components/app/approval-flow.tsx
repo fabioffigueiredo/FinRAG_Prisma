@@ -116,6 +116,7 @@ export function ApprovalFlow() {
                 Reabrir
               </Button>
               <Button
+                onClick={() => window.print()}
                 size="lg"
                 className="bg-[var(--success)]/15 text-[var(--success)] hover:bg-[var(--success)]/25"
               >
