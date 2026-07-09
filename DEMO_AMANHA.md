@@ -39,10 +39,13 @@ pnpm dev              # http://localhost:3000  (motor "Local" visível)
 ## Latência
 Primeira resposta do Local pode levar ~6s (o `startup` já faz warmup). As seguintes ~3–4s.
 
-## Nuvem (Groq) — para testers externos pelo site
-Precisa de `GROQ_API_KEY` válida no ambiente da API (a antiga está pendente de rotação):
-```bash
-export GROQ_API_KEY=<chave_valida>   # modelo: llama-3.3-70b-versatile (PRISMA_GROQ_MODEL)
-```
-Sem a chave, o motor "Nuvem" cai no Mock (resposta canônica). No site hospedado
-(`NEXT_PUBLIC_PRISMA_HOSTED=1`) a opção "Local" fica escondida; testers usam Nuvem/Demo.
+## Nuvem (Groq) — já funciona (chave auto-carregada)
+A API lê `services/prisma-api/.env` automaticamente (arquivo local, **fora do git**), que já
+contém a `GROQ_API_KEY` e `PRISMA_GROQ_MODEL=llama-3.3-70b-versatile`. Ou seja: **os dois
+motores funcionam sem exportar nada** — basta subir a API.
+- Local (qwen3): privado, ~1,6–5s.
+- Nuvem (Groq 70B): ~0,8–1,6s, mais rápido.
+
+Se um dia a chave rotacionar, edite `services/prisma-api/.env`. Sem chave válida, a Nuvem
+responde um texto de demonstração (não quebra). No site hospedado (`NEXT_PUBLIC_PRISMA_HOSTED=1`)
+a opção "Local" fica escondida; testers externos usam **Nuvem** (Groq) / Demo.
