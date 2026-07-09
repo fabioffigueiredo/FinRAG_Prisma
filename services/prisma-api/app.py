@@ -11,8 +11,36 @@ backend Ollama (local) e embeddings bge-m3.
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
+
+
+def _load_env() -> None:
+    """Carrega variáveis de .env (sem depender de python-dotenv) para a demo/VPS
+    ficarem turnkey. Procura em: prisma-api/, raiz do prisma/ e raiz do PD1/.
+    Só define chaves ainda não presentes no ambiente."""
+    here = Path(__file__).resolve()
+    candidatos = [
+        here.parent / ".env",
+        here.parents[2] / ".env",
+        here.parents[3] / "PD1" / ".env",
+    ]
+    for env in candidatos:
+        if not env.is_file():
+            continue
+        for linha in env.read_text(encoding="utf-8").splitlines():
+            linha = linha.strip()
+            if not linha or linha.startswith("#") or "=" not in linha:
+                continue
+            chave, _, valor = linha.partition("=")
+            chave = chave.strip()
+            valor = valor.strip().strip('"').strip("'")
+            if chave and chave not in os.environ:
+                os.environ[chave] = valor
+
+
+_load_env()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
