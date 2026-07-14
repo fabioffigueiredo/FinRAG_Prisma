@@ -6,6 +6,7 @@ respeitam o mesmo protocolo LLMClient.generate(prompt, *, temperature, max_token
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import requests
@@ -15,6 +16,29 @@ OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("PRISMA_OLLAMA_MODEL", "qwen3:8b")
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def _to_ollama_messages(messages: list[dict]) -> list[dict]:
+    """Traduz o formato genérico do agente (arguments como dict, tool_call_id
+    presente) para o wire format do Ollama: sem 'type'/'id' no tool_call, sem
+    'tool_call_id' na mensagem tool — o parser do Ollama espera arguments como
+    objeto puro, não como string JSON (diferente do Groq/OpenAI)."""
+    out = []
+    for m in messages:
+        if m.get("role") == "assistant" and m.get("tool_calls"):
+            out.append({
+                "role": "assistant",
+                "content": m.get("content", ""),
+                "tool_calls": [
+                    {"function": {"name": tc["name"], "arguments": tc["arguments"]}}
+                    for tc in m["tool_calls"]
+                ],
+            })
+        elif m.get("role") == "tool":
+            out.append({"role": "tool", "content": m.get("content", "")})
+        else:
+            out.append(m)
+    return out
 
 
 class OllamaClient:
@@ -41,6 +65,34 @@ class OllamaClient:
         conteudo = resp.json().get("message", {}).get("content", "")
         # remove qualquer bloco de raciocínio residual
         return _THINK_RE.sub("", conteudo).strip()
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None,
+             *, temperature: float = 0.0) -> dict:
+        """Uma rodada de chat com tool-calling (Ollama /api/chat suporta `tools`).
+        Retorna forma normalizada: {'content': str, 'tool_calls': [{id,name,arguments}]}."""
+        body: dict = {
+            "model": self.model,
+            "think": False,
+            "stream": False,
+            "options": {"temperature": temperature},
+            "messages": _to_ollama_messages(messages),
+        }
+        if tools:
+            body["tools"] = tools
+        resp = requests.post(f"{self.base}/api/chat", json=body, timeout=180)
+        resp.raise_for_status()
+        m = resp.json().get("message", {})
+        calls = []
+        for tc in m.get("tool_calls", []) or []:
+            fn = tc.get("function", {})
+            args = fn.get("arguments", {})
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+            calls.append({"id": tc.get("id", ""), "name": fn.get("name", ""), "arguments": args})
+        return {"content": _THINK_RE.sub("", m.get("content", "") or "").strip(), "tool_calls": calls}
 
     def warmup(self) -> None:
         """Pré-aquece o modelo (evita cold-load na demo ao vivo)."""

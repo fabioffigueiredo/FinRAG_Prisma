@@ -63,6 +63,7 @@ from escopo import (  # noqa: E402
     pede_recomendacao, tenta_injecao, INSTRUCAO_ESCOPO, RESPOSTA_ESCOPO, RESPOSTA_INJECAO,
 )
 import audit                                                             # noqa: E402
+import agent as agente                                                   # noqa: E402
 from radar import carregar_noticias, agregar                             # noqa: E402
 from sinais import gerar_sinais, AVISO_LEGAL, MODELO_VERSAO              # noqa: E402
 
@@ -130,6 +131,12 @@ class NarrativaReq(BaseModel):
 
 
 class PerguntaReq(BaseModel):
+    pergunta: str
+    backend: str = "ollama"
+    fundo: str = "ALFA-33"
+
+
+class AnalisarReq(BaseModel):
     pergunta: str
     backend: str = "ollama"
     fundo: str = "ALFA-33"
@@ -287,6 +294,65 @@ def perguntar(req: PerguntaReq):
         "bloqueados": [{"fonte": c.source, "motivo": "prompt injection detectado pelo guardrail"} for c in blocked],
         "backend": req.backend,
         "latency_ms": lat,
+    }
+
+
+@app.post("/analisar")
+def analisar_endpoint(req: AnalisarReq):
+    """Copiloto de análise conversacional: traduz a pergunta em chamadas de
+    ferramenta sobre os dados do fundo (POC sobre o seed) e devolve narrativa +
+    gráfico(s) + chips de ação. Mesmos guardrails do /perguntar."""
+    t0 = time.perf_counter()
+    if tenta_injecao(req.pergunta):
+        audit.registrar(rota="/analisar", fundo=req.fundo, pergunta=req.pergunta,
+                        backend=req.backend, latency_ms=0, fontes=[],
+                        bloqueados=["(pergunta) injeção/vazamento"], resposta=RESPOSTA_INJECAO,
+                        extra={"injecao": True})
+        return {"resposta": RESPOSTA_INJECAO, "consulta_echo": {}, "blocos": [], "acoes": [],
+                "avisos": [], "citacoes": [],
+                "bloqueados": [{"fonte": "pergunta do usuário",
+                                "motivo": "tentativa de injeção/vazamento de prompt"}],
+                "backend": req.backend, "latency_ms": 0, "injecao": True}
+    if pede_recomendacao(req.pergunta):
+        audit.registrar(rota="/analisar", fundo=req.fundo, pergunta=req.pergunta,
+                        backend=req.backend, latency_ms=0, fontes=[], bloqueados=[],
+                        resposta=RESPOSTA_ESCOPO, extra={"escopo": True})
+        return {"resposta": RESPOSTA_ESCOPO, "consulta_echo": {}, "blocos": [], "acoes": [],
+                "avisos": [], "citacoes": [], "bloqueados": [],
+                "backend": req.backend, "latency_ms": 0, "escopo": True}
+
+    fundos = STATE.get("fundos") or {}
+    degradado = False
+    try:
+        cliente = get_backend(req.backend)
+        if hasattr(cliente, "chat"):
+            resultado = agente.analisar(pergunta=req.pergunta, fundo_ativo=req.fundo,
+                                        backend=cliente, fundos=fundos)
+        else:
+            resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos)
+            degradado = True
+    except Exception:
+        resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos)
+        degradado = True
+
+    lat = int((time.perf_counter() - t0) * 1000)
+    audit.registrar(rota="/analisar", fundo=req.fundo, pergunta=req.pergunta,
+                    backend=req.backend, latency_ms=lat,
+                    fontes=[t["tool"] for t in resultado.get("tool_trace", [])],
+                    bloqueados=[], resposta=resultado["resposta"],
+                    extra={"consulta_echo": resultado.get("consulta_echo"),
+                           "tool_trace": resultado.get("tool_trace")})
+    return {
+        "resposta": resultado["resposta"],
+        "consulta_echo": resultado.get("consulta_echo", {}),
+        "blocos": resultado.get("blocos", []),
+        "acoes": resultado.get("acoes", []),
+        "avisos": resultado.get("avisos", []),
+        "citacoes": [],
+        "bloqueados": [],
+        "backend": req.backend,
+        "latency_ms": lat,
+        "degradado": degradado,
     }
 
 

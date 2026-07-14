@@ -1,4 +1,5 @@
 import type { Backend } from "@/components/app/backend-context";
+import type { Estrategia, PontoSerie } from "@/lib/fund";
 
 const BASE = process.env.NEXT_PUBLIC_PRISMA_API ?? "http://localhost:8000";
 
@@ -20,6 +21,32 @@ export type PerguntaResp = {
   latency_ms: number;
   fallback?: boolean;
   escopo?: boolean;
+};
+
+/** Bloco de conteúdo estruturado do Copiloto de Análise (gráfico ou KPIs). */
+export type BlocoGrafico =
+  | { tipo: "grafico"; chart: "waterfall"; titulo: string; dados: { estrategias: Estrategia[]; total: number; benchmark: number; benchLabel: string } }
+  | { tipo: "grafico"; chart: "linha"; titulo: string; dados: { serie: PontoSerie[] } }
+  | { tipo: "kpis"; chart: null; titulo: string; dados: { resumo: Record<string, number> } };
+
+export type Acao = { label: string; prompt: string };
+
+export type ConsultaEcho = { fundo?: string; periodo?: string; benchmark?: string; dimensao?: string };
+
+export type AnaliseResp = {
+  resposta: string;
+  consulta_echo: ConsultaEcho;
+  blocos: BlocoGrafico[];
+  acoes: Acao[];
+  avisos: string[];
+  citacoes: Citacao[];
+  bloqueados: { fonte: string; motivo: string }[];
+  backend: string;
+  latency_ms: number;
+  fallback?: boolean;
+  escopo?: boolean;
+  injecao?: boolean;
+  degradado?: boolean;
 };
 
 async function post<T>(path: string, body: unknown, fallback: T): Promise<T> {
@@ -119,6 +146,28 @@ export function perguntar(pergunta: string, backend: Backend, fundo?: string): P
         { fonte: "02_taxonomia_estrategias.md", trecho: "Crédito Privado: o retorno vem do carrego (juros acima do CDI) e da variação de spread", score: 0.79 },
         { fonte: "03_glossario_benchmark.md", trecho: "carrego (posições que rendem acima do CDI) e acertos direcionais", score: 0.71 },
       ],
+      bloqueados: [],
+      backend,
+      latency_ms: 0,
+    },
+  );
+}
+
+export function analisar(pergunta: string, backend: Backend, fundo?: string): Promise<AnaliseResp> {
+  return post<AnaliseResp>(
+    "/analisar",
+    { pergunta, backend, fundo },
+    {
+      resposta:
+        "(Sem conexão com a API) O Alfa Multimercado rendeu 4,25% no período, ante 3,10% do CDI — excesso de +1,15 pp, puxado por Crédito Privado e Juros Brasil.",
+      consulta_echo: { fundo: fundo ?? "ALFA-33", periodo: "2º trimestre 2026 (abr–jun)", benchmark: "CDI", dimensao: "Estratégia" },
+      blocos: [],
+      acoes: [
+        { label: "Comparar Benchmarks", prompt: "Compare o fundo com o Ibovespa e o IMA-B" },
+        { label: "Ver por Grupo Contábil", prompt: "Mostre a atribuição por grupo contábil" },
+      ],
+      avisos: [],
+      citacoes: [],
       bloqueados: [],
       backend,
       latency_ms: 0,
