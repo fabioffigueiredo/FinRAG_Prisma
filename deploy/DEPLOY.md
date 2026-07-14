@@ -6,8 +6,10 @@ nem Ollama. Os embeddings caem automaticamente para `sentence-transformers`
 
 ## Pré-requisitos na VPS
 - Docker + Docker Compose (`docker --version`, `docker compose version`);
-- nginx já servindo `wiki.ioi.ia.br` por HTTPS (certbot/Let's Encrypt);
-- Uma chave Groq (grátis em https://console.groq.com/keys).
+- `wiki.ioi.ia.br` servida pelo container **`ops-wiki-caddy`** (Caddy 2, NÃO
+  nginx — `deploy/nginx-prisma.conf` é só referência histórica, desatualizada);
+- Uma chave Groq (grátis em https://console.groq.com/keys), em `.env` na raiz
+  do repo clonado (`GROQ_API_KEY=...`), nunca commitada.
 
 ## Passo a passo
 
@@ -15,20 +17,27 @@ nem Ollama. Os embeddings caem automaticamente para `sentence-transformers`
 # 1. Clonar o repositório na VPS
 git clone https://github.com/fabioffigueiredo/FinRAG_Prisma.git
 cd FinRAG_Prisma
+echo "GROQ_API_KEY=gsk_suachave" > .env
 
-# 2. Subir os containers (a chave fica só no servidor, nunca no git)
-GROQ_API_KEY=gsk_suachave docker compose -f deploy/docker-compose.yml up -d --build
-#   web  -> 127.0.0.1:3100   |   api -> 127.0.0.1:8000  (ambos só no localhost)
+# 2. Criar a rede externa (só na 1ª vez) e conectar o Caddy do ops-wiki nela
+docker network create prisma-net
+docker network connect prisma-net ops-wiki-caddy
 
-# 3. Conferir
+# 3. Subir os containers (nomes fixos prisma-api/prisma-web, rede prisma-net)
+docker compose -f deploy/docker-compose.yml up -d --build
+#   prisma-web -> 127.0.0.1:3100   |   prisma-api -> 127.0.0.1:8000  (só localhost)
+
+# 4. Conferir
 curl -s http://127.0.0.1:8000/health        # {"status":"ok",...}
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3100/prisma   # 200
 ```
 
-```nginx
-# 4. Adicionar o proxy ao server{} de wiki.ioi.ia.br
-#    (conteúdo em deploy/nginx-prisma.conf) e recarregar:
-sudo nginx -t && sudo systemctl reload nginx
+```caddyfile
+# 5. Adicionar a rota no Caddyfile do ops-wiki (/srv/bb-asset-mirror/ops-wiki/Caddyfile):
+#   handle /prisma* { reverse_proxy prisma-web:3100 }
+#   handle /prisma/api* { uri strip_prefix /prisma/api; reverse_proxy prisma-api:8000 }
+# faça backup antes (Caddyfile.bak-prisma-<timestamp>) e recarregue:
+docker exec ops-wiki-caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
 Pronto: **https://wiki.ioi.ia.br/prisma**
