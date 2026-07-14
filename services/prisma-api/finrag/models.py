@@ -6,6 +6,7 @@ backend: troco remoto<->local com uma linha e comparo os dois honestamente.
 """
 from __future__ import annotations
 
+import json
 import os
 from typing import Protocol, runtime_checkable
 
@@ -33,6 +34,27 @@ class MockLLM:
         return self._scripted[idx]
 
 
+def _to_openai_messages(messages: list) -> list:
+    """Traduz o formato genérico do agente (arguments como dict) para o wire
+    format OpenAI/Groq: tool_calls precisa de 'type':'function' e arguments
+    como STRING JSON (diferente do Ollama, que quer objeto puro)."""
+    out = []
+    for m in messages:
+        if m.get("role") == "assistant" and m.get("tool_calls"):
+            out.append({
+                "role": "assistant",
+                "content": m.get("content", ""),
+                "tool_calls": [
+                    {"id": tc["id"], "type": "function",
+                     "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=False)}}
+                    for tc in m["tool_calls"]
+                ],
+            })
+        else:
+            out.append(m)
+    return out
+
+
 class GroqClient:
     """Decidi encapsular o Groq em uma classe porque notei que precisava de abstração para swapear com GPT4All sem quebrar o pipeline."""
 
@@ -51,6 +73,24 @@ class GroqClient:
             max_tokens=max_tokens,
         )
         return resp.choices[0].message.content or ""
+
+    def chat(self, messages: list, tools: "list | None" = None,
+             *, temperature: float = 0.0) -> dict:
+        """Uma rodada de chat com tool-calling (Groq é OpenAI-compatível).
+        Retorna forma normalizada: {'content': str, 'tool_calls': [{id,name,arguments}]}."""
+        kwargs = dict(model=self.model, messages=_to_openai_messages(messages), temperature=temperature)
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+        msg = self._client.chat.completions.create(**kwargs).choices[0].message
+        calls = []
+        for tc in (msg.tool_calls or []):
+            try:
+                args = json.loads(tc.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            calls.append({"id": tc.id, "name": tc.function.name, "arguments": args})
+        return {"content": msg.content or "", "tool_calls": calls}
 
 
 class GPT4AllClient:
