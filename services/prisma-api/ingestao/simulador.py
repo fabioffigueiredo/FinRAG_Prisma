@@ -133,12 +133,20 @@ class SimuladorConnector:
         return [PeriodoDTO(label=label, data_inicio=ini, data_fim=fim)
                 for label, ini, fim in PERIODOS]
 
-    def _retorno_periodo(self, seed: _FundoSeed, periodo_label: str,
-                        rnd: random.Random) -> tuple[float, float]:
+    def _retorno_periodo(self, seed: _FundoSeed, periodo_label: str) -> tuple[float, float]:
         """(retorno_cota, retorno_bench) do período — idêntico ao seed pra
-        âncora, sintetizado por um fator de tendência pros anteriores."""
+        âncora, sintetizado por um fator de tendência pros anteriores.
+
+        Decidi seedar o RNG só em (fundo, período) — sem sufixo de
+        dimensão/propósito — porque notei, com o teste de reconciliação da
+        Meta 2, que série diária e cada dimensão de contribuição estavam
+        cada uma sorteando um retorno_cota DIFERENTE pro mesmo período (cada
+        chamador tinha seu próprio `rnd`) — batimento nunca fechava pros
+        trimestres históricos. Precisa ser a MESMA fonte de verdade sempre.
+        """
         if periodo_label == PERIODO_ANCORA:
             return seed.retorno_cota, seed.retorno_bench
+        rnd = random.Random(f"{seed.codigo}:{periodo_label}:retorno")
         fator = _fator_trimestre(rnd)
         return round(seed.retorno_cota * fator, 2), round(seed.retorno_bench * fator, 2)
 
@@ -149,7 +157,7 @@ class SimuladorConnector:
                     for p in seed.serie_diaria]
         label, ini, fim = next(p for p in PERIODOS if p[0] == periodo_label)
         rnd = random.Random(f"{fundo_codigo}:{periodo_label}:serie")
-        retorno_cota, retorno_bench = self._retorno_periodo(seed, periodo_label, rnd)
+        retorno_cota, retorno_bench = self._retorno_periodo(seed, periodo_label)
         dias = _dias_uteis(ini, fim)
         n = len(dias) - 1
         passo_c, passo_b = retorno_cota / n, retorno_bench / n
@@ -174,7 +182,7 @@ class SimuladorConnector:
                             dimensao: str) -> list[ContribuicaoDTO]:
         seed = self._seeds[fundo_codigo]
         rnd = random.Random(f"{fundo_codigo}:{periodo_label}:{dimensao}")
-        retorno_cota, _ = self._retorno_periodo(seed, periodo_label, rnd)
+        retorno_cota, _ = self._retorno_periodo(seed, periodo_label)
 
         if dimensao == "estrategia" and periodo_label == PERIODO_ANCORA:
             return [ContribuicaoDTO(dimensao=dimensao, chave_dimensao=e["nome"],
@@ -183,8 +191,16 @@ class SimuladorConnector:
                     for e in seed.estrategias]
 
         if dimensao == "ativos" and periodo_label == PERIODO_ANCORA:
+            # Decidi reajustar proporcionalmente pro total bater com
+            # retorno_cota porque notei, no teste de reconciliação da Meta
+            # 2, que o breakdown por ativo do seed original (escrito à mão)
+            # somava 4.50pp pro Alfa contra um retorno_cota de 4.25pp — um
+            # defeito pré-existente nos dados que o motor corretamente
+            # acusou; aqui reescalo em vez de mexer no JSON publicado.
+            soma_original = sum(a["contribuicao_pp"] for a in seed.ativos)
+            fator_ajuste = (retorno_cota / soma_original) if soma_original else 1.0
             return [ContribuicaoDTO(dimensao=dimensao, chave_dimensao=a["ativo"],
-                                    contribuicao_pp=a["contribuicao_pp"],
+                                    contribuicao_pp=round(a["contribuicao_pp"] * fator_ajuste, 4),
                                     peso_medio=a["peso_medio"])
                     for a in seed.ativos]
 
@@ -198,6 +214,14 @@ class SimuladorConnector:
             return [ContribuicaoDTO(dimensao=dimensao, chave_dimensao=n, contribuicao_pp=p,
                                     peso_medio=abs(w), cor=c)
                     for n, p, w, c in zip(nomes, partes, pesos, cores)]
+
+        if dimensao == "ativos":
+            # trimestre histórico: mesma ideia, mas com os nomes de ativo.
+            nomes = [a["ativo"] for a in seed.ativos]
+            partes = _redistribuir(retorno_cota, len(nomes), rnd)
+            pesos = _redistribuir(100.0, len(nomes), rnd)
+            return [ContribuicaoDTO(dimensao=dimensao, chave_dimensao=n, contribuicao_pp=p, peso_medio=abs(w))
+                    for n, p, w in zip(nomes, partes, pesos)]
 
         buckets = BUCKETS_POR_DIMENSAO.get(dimensao)
         if buckets is None:
