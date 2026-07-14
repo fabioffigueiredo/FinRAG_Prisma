@@ -77,7 +77,10 @@ app.add_middleware(
 
 STATE: dict = {"index": None, "embed": "?", "fundos": None, "noticias": None}
 
-NOMES_FUNDOS = {"alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12"}
+NOMES_FUNDOS = {
+    "alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12",
+    "delta": "DELTA-08", "epsilon": "EPSILON-45", "zeta": "ZETA-19", "theta": "THETA-52",
+}
 
 
 def e_comparativa(pergunta: str) -> list[str]:
@@ -383,8 +386,9 @@ def ingerir(req: IngestReq):
 def radar_endpoint():
     noticias = STATE.get("noticias") or []
     if not noticias:
-        return {"ok": False, "noticias": [], "agregado": {}}
-    return {"ok": True, "noticias": noticias, "agregado": agregar(noticias)}
+        return {"ok": False, "noticias": [], "agregado": {}, "degradado": True}
+    degradado = not any(n.get("fonte") == "rss" for n in noticias)
+    return {"ok": True, "noticias": noticias, "agregado": agregar(noticias), "degradado": degradado}
 
 
 @app.get("/sinais")

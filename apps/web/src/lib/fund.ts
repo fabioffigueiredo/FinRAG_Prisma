@@ -1,6 +1,10 @@
 import fundoAlfa from "@/data/fundo_alfa.json";
 import fundoBeta from "@/data/fundo_beta.json";
 import fundoGama from "@/data/fundo_gama.json";
+import fundoDelta from "@/data/fundo_delta.json";
+import fundoEpsilon from "@/data/fundo_epsilon.json";
+import fundoZeta from "@/data/fundo_zeta.json";
+import fundoTheta from "@/data/fundo_theta.json";
 
 export type Estrategia = {
   nome: string;
@@ -50,6 +54,10 @@ export const FUNDS: Record<string, Fundo> = {
   "ALFA-33": fundoAlfa as Fundo,
   "BETA-71": fundoBeta as Fundo,
   "GAMA-12": fundoGama as Fundo,
+  "DELTA-08": fundoDelta as Fundo,
+  "EPSILON-45": fundoEpsilon as Fundo,
+  "ZETA-19": fundoZeta as Fundo,
+  "THETA-52": fundoTheta as Fundo,
 };
 
 export const FUND_PADRAO = "ALFA-33";

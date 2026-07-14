@@ -43,3 +43,21 @@ def test_saida_ordenada_por_risco_e_tem_metadados():
     assert s[0]["prob_neg"] >= s[-1]["prob_neg"]
     assert all("base_calculo" in x and "modelo_versao" in x for x in s)
     assert "recomend" not in sinais.AVISO_LEGAL.lower().split("não")[0]  # começa negando
+
+
+def test_estrategia_sem_noticia_usa_mercado_geral_como_fallback():
+    agg_com_geral = {**AGG, "Mercado Geral": {"pos": 0, "neg": 0, "neu": 4, "total": 4, "liquido": 0.0}}
+    noticias_com_geral = NOTICIAS + [{"id": "n20", "estrategia": "Mercado Geral"}]
+    s = sinais.gerar_sinais(FUNDO, agg_com_geral, noticias_com_geral)
+    sn = next(x for x in s if x["estrategia"] == "Sem Noticia")
+    assert sn["fonte_geral"] is True
+    assert "noticia:n20" in sn["evidencias"]
+    assert "mercado geral" in sn["base_calculo"].lower()
+
+
+def test_estrategia_prioriza_noticia_propria_sobre_mercado_geral():
+    agg_com_geral = {**AGG, "Mercado Geral": {"pos": 5, "neg": 0, "neu": 0, "total": 5, "liquido": 1.0}}
+    s = sinais.gerar_sinais(FUNDO, agg_com_geral, NOTICIAS)
+    bb = next(x for x in s if x["estrategia"] == "Bolsa Brasil")
+    assert bb["fonte_geral"] is False
+    assert bb["prob_neg"] == 83  # inalterado — usa o sentimento próprio, não o geral

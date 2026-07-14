@@ -1,0 +1,420 @@
+{
+  "fundo": {
+    "nome": "Delta Multimercado FIC FIM",
+    "codigo": "DELTA-08",
+    "cnpj": "00.000.000/0004-00 (fictício)",
+    "benchmark": "CDI",
+    "periodo": "2º trimestre 2026 (abr–jun)",
+    "classe": "Multimercado Macro"
+  },
+  "resumo": {
+    "retorno_cota": -1.85,
+    "retorno_bench": 3.05,
+    "excesso_pp": -4.9,
+    "pct_cdi": -60.7,
+    "beta": 0.2,
+    "alpha_pp": -4.85,
+    "vol_anual": 6.5,
+    "patrimonio_mm": 410.2,
+    "num_cotistas": 980
+  },
+  "estrategias": [
+    {
+      "nome": "Bolsa Brasil",
+      "contribuicao_pp": -2.2,
+      "peso_medio": 20.0,
+      "cor": "red"
+    },
+    {
+      "nome": "Câmbio (USD)",
+      "contribuicao_pp": -0.55,
+      "peso_medio": 12.0,
+      "cor": "red"
+    },
+    {
+      "nome": "Juros Brasil",
+      "contribuicao_pp": 0.4,
+      "peso_medio": 22.0,
+      "cor": "blue"
+    },
+    {
+      "nome": "Crédito Privado",
+      "contribuicao_pp": 0.35,
+      "peso_medio": 18.0,
+      "cor": "gold"
+    },
+    {
+      "nome": "Caixa e Over",
+      "contribuicao_pp": 0.25,
+      "peso_medio": 28.0,
+      "cor": "neutral"
+    },
+    {
+      "nome": "Custos e Despesas",
+      "contribuicao_pp": -0.1,
+      "peso_medio": 0.0,
+      "cor": "red"
+    }
+  ],
+  "ativos": [
+    {
+      "estrategia": "Bolsa Brasil",
+      "ativo": "Setor Varejo",
+      "contribuicao_pp": -1.3,
+      "peso_medio": 11.0
+    },
+    {
+      "estrategia": "Bolsa Brasil",
+      "ativo": "Setor Bancário",
+      "contribuicao_pp": -0.9,
+      "peso_medio": 9.0
+    },
+    {
+      "estrategia": "Câmbio (USD)",
+      "ativo": "USD/BRL a termo",
+      "contribuicao_pp": -0.55,
+      "peso_medio": 12.0
+    },
+    {
+      "estrategia": "Juros Brasil",
+      "ativo": "NTN-B 2030",
+      "contribuicao_pp": 0.4,
+      "peso_medio": 22.0
+    },
+    {
+      "estrategia": "Crédito Privado",
+      "ativo": "CDB Banco Médio 2027",
+      "contribuicao_pp": 0.35,
+      "peso_medio": 18.0
+    },
+    {
+      "estrategia": "Caixa e Over",
+      "ativo": "Operações Compromissadas",
+      "contribuicao_pp": 0.25,
+      "peso_medio": 28.0
+    }
+  ],
+  "serie_diaria": [
+    {
+      "data": "2026-04-01",
+      "cota": 0.0,
+      "bench": 0.0
+    },
+    {
+      "data": "2026-04-02",
+      "cota": -0.1592,
+      "bench": 0.0495
+    },
+    {
+      "data": "2026-04-03",
+      "cota": 0.0494,
+      "bench": 0.0963
+    },
+    {
+      "data": "2026-04-06",
+      "cota": -0.16,
+      "bench": 0.136
+    },
+    {
+      "data": "2026-04-07",
+      "cota": -0.0802,
+      "bench": 0.1976
+    },
+    {
+      "data": "2026-04-08",
+      "cota": -0.3102,
+      "bench": 0.2334
+    },
+    {
+      "data": "2026-04-09",
+      "cota": -0.459,
+      "bench": 0.2841
+    },
+    {
+      "data": "2026-04-10",
+      "cota": -0.232,
+      "bench": 0.3466
+    },
+    {
+      "data": "2026-04-13",
+      "cota": -0.3999,
+      "bench": 0.3847
+    },
+    {
+      "data": "2026-04-14",
+      "cota": -0.3515,
+      "bench": 0.4369
+    },
+    {
+      "data": "2026-04-15",
+      "cota": -0.3945,
+      "bench": 0.491
+    },
+    {
+      "data": "2026-04-16",
+      "cota": -0.4406,
+      "bench": 0.5278
+    },
+    {
+      "data": "2026-04-17",
+      "cota": -0.4656,
+      "bench": 0.5748
+    },
+    {
+      "data": "2026-04-20",
+      "cota": -0.6421,
+      "bench": 0.6315
+    },
+    {
+      "data": "2026-04-21",
+      "cota": -0.4994,
+      "bench": 0.6806
+    },
+    {
+      "data": "2026-04-22",
+      "cota": -0.7272,
+      "bench": 0.738
+    },
+    {
+      "data": "2026-04-23",
+      "cota": -0.8827,
+      "bench": 0.7783
+    },
+    {
+      "data": "2026-04-24",
+      "cota": -1.1452,
+      "bench": 0.821
+    },
+    {
+      "data": "2026-04-27",
+      "cota": -1.2844,
+      "bench": 0.8599
+    },
+    {
+      "data": "2026-04-28",
+      "cota": -1.3532,
+      "bench": 0.9107
+    },
+    {
+      "data": "2026-04-29",
+      "cota": -1.1747,
+      "bench": 0.974
+    },
+    {
+      "data": "2026-04-30",
+      "cota": -1.2577,
+      "bench": 1.0273
+    },
+    {
+      "data": "2026-05-01",
+      "cota": -1.4734,
+      "bench": 1.0862
+    },
+    {
+      "data": "2026-05-04",
+      "cota": -1.6168,
+      "bench": 1.1333
+    },
+    {
+      "data": "2026-05-05",
+      "cota": -1.3936,
+      "bench": 1.1912
+    },
+    {
+      "data": "2026-05-06",
+      "cota": -1.6346,
+      "bench": 1.2299
+    },
+    {
+      "data": "2026-05-07",
+      "cota": -1.5971,
+      "bench": 1.2742
+    },
+    {
+      "data": "2026-05-08",
+      "cota": -1.6811,
+      "bench": 1.33
+    },
+    {
+      "data": "2026-05-11",
+      "cota": -1.6232,
+      "bench": 1.3874
+    },
+    {
+      "data": "2026-05-12",
+      "cota": -1.7266,
+      "bench": 1.4356
+    },
+    {
+      "data": "2026-05-13",
+      "cota": -1.6535,
+      "bench": 1.4739
+    },
+    {
+      "data": "2026-05-14",
+      "cota": -1.6773,
+      "bench": 1.5175
+    },
+    {
+      "data": "2026-05-15",
+      "cota": -1.625,
+      "bench": 1.5594
+    },
+    {
+      "data": "2026-05-18",
+      "cota": -1.4469,
+      "bench": 1.6034
+    },
+    {
+      "data": "2026-05-19",
+      "cota": -1.4287,
+      "bench": 1.6633
+    },
+    {
+      "data": "2026-05-20",
+      "cota": -1.6302,
+      "bench": 1.7049
+    },
+    {
+      "data": "2026-05-21",
+      "cota": -1.8705,
+      "bench": 1.767
+    },
+    {
+      "data": "2026-05-22",
+      "cota": -1.6701,
+      "bench": 1.829
+    },
+    {
+      "data": "2026-05-25",
+      "cota": -1.6983,
+      "bench": 1.8663
+    },
+    {
+      "data": "2026-05-26",
+      "cota": -1.874,
+      "bench": 1.9132
+    },
+    {
+      "data": "2026-05-27",
+      "cota": -1.6735,
+      "bench": 1.9636
+    },
+    {
+      "data": "2026-05-28",
+      "cota": -1.6566,
+      "bench": 1.9999
+    },
+    {
+      "data": "2026-05-29",
+      "cota": -1.5647,
+      "bench": 2.0482
+    },
+    {
+      "data": "2026-06-01",
+      "cota": -1.3968,
+      "bench": 2.111
+    },
+    {
+      "data": "2026-06-02",
+      "cota": -1.5265,
+      "bench": 2.1499
+    },
+    {
+      "data": "2026-06-03",
+      "cota": -1.6208,
+      "bench": 2.2034
+    },
+    {
+      "data": "2026-06-04",
+      "cota": -1.4543,
+      "bench": 2.2427
+    },
+    {
+      "data": "2026-06-05",
+      "cota": -1.6594,
+      "bench": 2.2956
+    },
+    {
+      "data": "2026-06-08",
+      "cota": -1.5498,
+      "bench": 2.3581
+    },
+    {
+      "data": "2026-06-09",
+      "cota": -1.7736,
+      "bench": 2.3998
+    },
+    {
+      "data": "2026-06-10",
+      "cota": -1.701,
+      "bench": 2.4356
+    },
+    {
+      "data": "2026-06-11",
+      "cota": -1.6225,
+      "bench": 2.4737
+    },
+    {
+      "data": "2026-06-12",
+      "cota": -1.4201,
+      "bench": 2.5255
+    },
+    {
+      "data": "2026-06-15",
+      "cota": -1.2709,
+      "bench": 2.5616
+    },
+    {
+      "data": "2026-06-16",
+      "cota": -1.2917,
+      "bench": 2.5998
+    },
+    {
+      "data": "2026-06-17",
+      "cota": -1.4654,
+      "bench": 2.6503
+    },
+    {
+      "data": "2026-06-18",
+      "cota": -1.6629,
+      "bench": 2.7135
+    },
+    {
+      "data": "2026-06-19",
+      "cota": -1.6711,
+      "bench": 2.7617
+    },
+    {
+      "data": "2026-06-22",
+      "cota": -1.6888,
+      "bench": 2.8092
+    },
+    {
+      "data": "2026-06-23",
+      "cota": -1.9257,
+      "bench": 2.864
+    },
+    {
+      "data": "2026-06-24",
+      "cota": -1.7466,
+      "bench": 2.9024
+    },
+    {
+      "data": "2026-06-25",
+      "cota": -1.7655,
+      "bench": 2.9554
+    },
+    {
+      "data": "2026-06-26",
+      "cota": -1.6874,
+      "bench": 2.9961
+    },
+    {
+      "data": "2026-06-29",
+      "cota": -1.85,
+      "bench": 3.05
+    }
+  ],
+  "fics": []
+}
