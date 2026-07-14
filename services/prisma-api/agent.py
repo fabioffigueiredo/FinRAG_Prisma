@@ -6,6 +6,7 @@ atribuição — ver ROTEIRO/plano). O LLM planeja e narra; nunca calcula númer
 from __future__ import annotations
 
 import json
+import re
 
 DIMENSOES_VALIDAS = [
     "estrategia", "grupo_contabil", "supergrupo", "vencimento",
@@ -126,6 +127,25 @@ def _match_fundo(fundos: dict, nome: str) -> str | None:
             return cod
     for cod, f in fundos.items():
         if nome_low in f["fundo"]["nome"].lower():
+            return cod
+    return None
+
+
+def _detectar_fundo_citado(pergunta: str, fundos: dict) -> str | None:
+    """Resolução determinística: se a pergunta citar um fundo explicitamente
+    (código ou alias, com fronteira de palavra), retorna o código — tem
+    prioridade sobre o 'fundo em foco' da tela ativa, para o agente não
+    responder sobre o fundo errado quando o usuário nomeia outro."""
+    texto = (pergunta or "").lower()
+    for cod in fundos:
+        if re.search(rf"\b{re.escape(cod.lower())}\b", texto):
+            return cod
+    for alias, cod in _ALIASES_FUNDO.items():
+        if cod in fundos and re.search(rf"\b{re.escape(alias)}\b", texto):
+            return cod
+    for cod, f in fundos.items():
+        primeira_palavra = f["fundo"]["nome"].split()[0].lower()
+        if len(primeira_palavra) > 3 and re.search(rf"\b{re.escape(primeira_palavra)}\b", texto):
             return cod
     return None
 
@@ -276,9 +296,20 @@ def analisar(*, pergunta: str, fundo_ativo: str, backend, fundos: dict, max_turn
     tool_trace: list[dict] = []
     resposta = ""
 
+    # Detecção determinística (não o LLM): se a pergunta citar outro fundo,
+    # isso tem prioridade sobre o fundo em foco na tela.
+    fundo_citado = _detectar_fundo_citado(pergunta, fundos)
+    if fundo_citado and fundo_citado != fundo_ativo:
+        contexto_fundo = (
+            f"[fundo em foco na tela: {fundo_ativo}; mas esta pergunta cita outro fundo "
+            f"({fundo_citado}) — use {fundo_citado}, IGNORE o fundo em foco] {pergunta}"
+        )
+    else:
+        contexto_fundo = f"[fundo em foco: {fundo_ativo}] {pergunta}"
+
     messages = [
         {"role": "system", "content": SISTEMA_AGENTE},
-        {"role": "user", "content": f"[fundo em foco: {fundo_ativo}] {pergunta}"},
+        {"role": "user", "content": contexto_fundo},
     ]
 
     for _ in range(max_turns):
@@ -325,10 +356,12 @@ def analisar(*, pergunta: str, fundo_ativo: str, backend, fundos: dict, max_turn
     }
 
 
-def analisar_mock(*, fundo_ativo: str, fundos: dict) -> dict:
+def analisar_mock(*, fundo_ativo: str, fundos: dict, pergunta: str = "") -> dict:
     """Caminho determinístico para o motor Demo (sem tool-calling): chama a tool
     diretamente e narra com texto fixo, para o modo Demo nunca quebrar."""
-    out = _tool_obter_atribuicao(fundos, {"fundo": fundo_ativo})
+    fundo_citado = _detectar_fundo_citado(pergunta, fundos)
+    fundo_alvo = fundo_citado or fundo_ativo
+    out = _tool_obter_atribuicao(fundos, {"fundo": fundo_alvo})
     if "erro" in out:
         return {"resposta": out["erro"], "consulta_echo": {}, "blocos": [], "acoes": [], "avisos": [], "tool_trace": []}
     bloco = _bloco_grafico("obter_atribuicao", out)
