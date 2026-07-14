@@ -1,0 +1,17 @@
+# Postgres de desenvolvimento p/ a Meta 1 (fundação de dados). Rodar da RAIZ:
+#   docker compose -f docker-compose.dev.yml up -d
+services:
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=prisma
+      - POSTGRES_PASSWORD=prisma_dev
+      - POSTGRES_DB=prisma
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - prisma_dev_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  prisma_dev_pgdata:
