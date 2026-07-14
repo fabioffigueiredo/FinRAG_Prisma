@@ -329,10 +329,10 @@ def analisar_endpoint(req: AnalisarReq):
             resultado = agente.analisar(pergunta=req.pergunta, fundo_ativo=req.fundo,
                                         backend=cliente, fundos=fundos)
         else:
-            resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos)
+            resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos, pergunta=req.pergunta)
             degradado = True
     except Exception:
-        resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos)
+        resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos, pergunta=req.pergunta)
         degradado = True
 
     lat = int((time.perf_counter() - t0) * 1000)
