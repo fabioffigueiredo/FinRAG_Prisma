@@ -9,6 +9,9 @@ sentence-transformers==3.0.1   # fallback de embeddings quando o Ollama não est
 rank-bm25==0.2.2
 groq==1.5.0                    # backend "Nuvem" (opcional; requer GROQ_API_KEY)
 feedparser==6.0.11              # radar de mercado: RSS bilíngue EN+PT, com fallback pro seed estático
+sqlalchemy==2.0.36              # Meta 1: fundação de dados (schema Fundo/Estrategia SCD2/VaR/Benchmark)
+alembic==1.14.0                 # Meta 1: migrations versionadas do schema
+psycopg[binary]==3.2.3          # Meta 1: driver Postgres
 pytest
 
 # Dependências extras APENAS para reexecutar a classificação offline de notícias:
