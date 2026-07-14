@@ -8,6 +8,7 @@ anterior e abre uma nova, com hash de auditoria, tudo numa transação.
 """
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 from datetime import date, datetime, timezone
@@ -22,6 +23,7 @@ from .models import (
     Benchmark,
     BenchmarkPeso,
     Contribuicao,
+    Dimensao,
     EstrategiaVersao,
     Fundo,
     LogAlteracaoEstrategia,
@@ -44,6 +46,36 @@ def _hash_classificacao(fundo_codigo: str, ativo_codigo: str, nome_estrategia: s
     (o hash em si pode incluir o nome só como metadado de auditoria)."""
     payload = f"{fundo_codigo}|{ativo_codigo}|{nome_estrategia}|{matricula}|{criado_em.isoformat()}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _normalizar_nome(nome: str) -> str:
+    return " ".join(nome.strip().lower().split())
+
+
+def detectar_near_duplicates_ativo(db: Session, ativo_nome: str, *,
+                                   excluir_codigo: str | None = None,
+                                   limiar: float = 0.82) -> list[dict]:
+    """Antes de cadastrar um ativo NOVO (código ainda não existe), avisa se
+    o nome é PARECIDO com um ativo já cadastrado — é a mesma armadilha do
+    `NOME_LONGO_TITULO` texto-livre do sistema real: um erro de digitação
+    ("Debenture" sem acento, por exemplo) cria um ativo duplicado em vez de
+    reaproveitar o existente, e ninguém percebe até o batimento divergir.
+
+    Decidi usar `difflib` (stdlib, sem dependência nova) em vez de um
+    embedding — pra esse caso (nomes curtos, erro de digitação/acentuação)
+    a distância de string já resolve bem e é auditável (não é uma caixa-preta).
+    """
+    alvo = _normalizar_nome(ativo_nome)
+    achados = []
+    for candidato in db.scalars(select(Ativo)):
+        if excluir_codigo and candidato.codigo == excluir_codigo:
+            continue
+        score = difflib.SequenceMatcher(None, alvo, _normalizar_nome(candidato.nome)).ratio()
+        if score >= limiar:
+            achados.append({"ativo_codigo": candidato.codigo, "ativo_nome": candidato.nome,
+                            "similaridade": round(score, 3)})
+    achados.sort(key=lambda a: -a["similaridade"])
+    return achados
 
 
 def _obter_ou_criar_ativo(db: Session, codigo: str, nome: str, tipo: str) -> Ativo:
@@ -157,3 +189,93 @@ def popular_do_conector(
                 nome_estrategia=classificacao.nome_estrategia, matricula=matricula,
             )
     db.commit()
+
+
+def obter_contribuicoes_dimensao(db: Session, fundo_codigo: str, periodo_label: str,
+                                 dimensao: str) -> list[dict]:
+    """Lê contribuições de uma dimensão específica do Postgres (Meta 3) —
+    é o que liga o copiloto às 7 dimensões que antes só existiam como aviso
+    de 'indisponível na demo' em `agent.py::_tool_obter_atribuicao`."""
+    try:
+        dim = Dimensao(dimensao)
+    except ValueError:
+        return []
+    periodo = db.scalar(
+        select(Periodo).where(Periodo.fundo_codigo == fundo_codigo, Periodo.label == periodo_label)
+    )
+    if periodo is None:
+        return []
+    linhas = db.scalars(
+        select(Contribuicao).where(
+            Contribuicao.fundo_codigo == fundo_codigo,
+            Contribuicao.periodo_id == periodo.id,
+            Contribuicao.dimensao == dim,
+        )
+    )
+    return [
+        {"nome": c.chave_dimensao, "contribuicao_pp": c.contribuicao_pp,
+         "peso_medio": c.peso_medio, "cor": c.cor}
+        for c in linhas
+    ]
+
+
+def obter_periodos_disponiveis(db: Session, fundo_codigo: str) -> list[dict]:
+    """Lista os períodos com dado carregado pra um fundo — usado pela
+    narrativa proativa (Meta 3) pra achar 'o período anterior'."""
+    periodos = db.scalars(
+        select(Periodo).where(Periodo.fundo_codigo == fundo_codigo).order_by(Periodo.data_inicio)
+    )
+    return [{"label": p.label, "data_inicio": p.data_inicio, "data_fim": p.data_fim} for p in periodos]
+
+
+def comparar_periodos_dimensao(db: Session, fundo_codigo: str, dimensao: str = "estrategia") -> dict | None:
+    """Compara o período mais recente com o anterior — quem cresceu, quem
+    caiu, por quanto. Devolvo os NÚMEROS já calculados (deltas); quem
+    narra é o LLM no `agent.py`, nunca esta função (mesmo princípio de
+    'o LLM planeja e narra, nunca calcula' do resto do copiloto)."""
+    periodos = obter_periodos_disponiveis(db, fundo_codigo)
+    if len(periodos) < 2:
+        return None
+    atual, anterior = periodos[-1], periodos[-2]
+
+    atuais = {c["nome"]: c["contribuicao_pp"]
+             for c in obter_contribuicoes_dimensao(db, fundo_codigo, atual["label"], dimensao)}
+    anteriores = {c["nome"]: c["contribuicao_pp"]
+                 for c in obter_contribuicoes_dimensao(db, fundo_codigo, anterior["label"], dimensao)}
+    if not atuais or not anteriores:
+        return None
+
+    buckets = sorted(set(atuais) | set(anteriores))
+    deltas = [
+        {"chave": b, "contribuicao_atual_pp": round(atuais.get(b, 0.0), 2),
+         "contribuicao_anterior_pp": round(anteriores.get(b, 0.0), 2),
+         "delta_pp": round(atuais.get(b, 0.0) - anteriores.get(b, 0.0), 2)}
+        for b in buckets
+    ]
+    deltas.sort(key=lambda d: abs(d["delta_pp"]), reverse=True)
+
+    retorno_atual = _ultimo_cota(db, fundo_codigo, atual["label"])
+    retorno_anterior = _ultimo_cota(db, fundo_codigo, anterior["label"])
+
+    return {
+        "periodo_atual": atual["label"], "periodo_anterior": anterior["label"],
+        "dimensao": dimensao,
+        "retorno_cota_atual_pp": retorno_atual, "retorno_cota_anterior_pp": retorno_anterior,
+        "delta_retorno_cota_pp": (round(retorno_atual - retorno_anterior, 2)
+                                 if retorno_atual is not None and retorno_anterior is not None else None),
+        "maiores_variacoes": deltas[:5],
+    }
+
+
+def _ultimo_cota(db: Session, fundo_codigo: str, periodo_label: str) -> float | None:
+    periodo = db.scalar(
+        select(Periodo).where(Periodo.fundo_codigo == fundo_codigo, Periodo.label == periodo_label)
+    )
+    if periodo is None:
+        return None
+    ponto = db.scalar(
+        select(SerieDiaria).where(
+            SerieDiaria.fundo_codigo == fundo_codigo, SerieDiaria.periodo_id == periodo.id,
+        ).order_by(SerieDiaria.data.desc()).limit(1)
+    )
+    return ponto.cota if ponto else None

@@ -30,7 +30,9 @@ SISTEMA_AGENTE = (
     "números, datas ou nomes de estratégia. Sempre que a pergunta envolver retorno, "
     "contribuição por estratégia/grupo, comparação com benchmark ou evolução no tempo, "
     "chame a ferramenta apropriada antes de responder; use resolver_fundo primeiro se o "
-    "usuário mencionar o fundo por nome. Depois de obter os dados, escreva um parágrafo "
+    "usuário mencionar o fundo por nome. Se a pergunta for sobre mudança/evolução entre "
+    "períodos ('o que mudou', 'comparado ao trimestre passado'), use comparar_periodos. "
+    "Depois de obter os dados, escreva um parágrafo "
     "curto e objetivo em português explicando o resultado, citando os números retornados "
     "e mencionando qualquer aviso da ferramenta. Não recomende compra/venda nem faça "
     "previsão de mercado."
@@ -112,10 +114,36 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "comparar_periodos",
+            "description": (
+                "Compara o período mais recente com o anterior do mesmo fundo: quanto o "
+                "retorno da cota mudou e quais estratégias/grupos mais subiram ou caíram de "
+                "contribuição. Use para 'o que mudou desde o trimestre passado', 'evolução "
+                "entre períodos', 'comparar com o período anterior'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fundo": {"type": "string"},
+                    "dimensao": {"type": "string", "enum": DIMENSOES_VALIDAS,
+                                 "description": "Dimensão de agregação a comparar (padrão: estratégia)"},
+                },
+                "required": ["fundo"],
+            },
+        },
+    },
 ]
 
 
-def _match_fundo(fundos: dict, nome: str) -> str | None:
+def _match_fundo(fundos: dict, nome: str, indice_semantico=None) -> str | None:
+    """Resolve nome -> código. Decidi deixar a busca semântica como ÚLTIMO
+    recurso (só quando código exato/alias/substring falham) porque notei que
+    ela é probabilística — prefiro sempre o match determinístico quando ele
+    existe, e só cair pra "parecido" quando não sobra outra opção (ex.:
+    'fundo de crédito privado' ou um nome digitado com erro)."""
     nome_low = (nome or "").strip().lower()
     if not nome_low:
         return None
@@ -128,7 +156,32 @@ def _match_fundo(fundos: dict, nome: str) -> str | None:
     for cod, f in fundos.items():
         if nome_low in f["fundo"]["nome"].lower():
             return cod
+    if indice_semantico is not None:
+        resultados = indice_semantico.search(nome, k=1)
+        if resultados:
+            chunk, score = resultados[0]
+            if score >= 0.3 and chunk.source in fundos:
+                return chunk.source
     return None
+
+
+def construir_indice_semantico_fundos(fundos: dict, embed_fn=None):
+    """Constrói um índice semântico (FinRAG `SemanticIndex`, já vendorizado
+    neste pacote) sobre nome/classe/benchmark de cada fundo — pra resolver
+    buscas por significado ('fundo de crédito privado', nome com erro de
+    digitação) em vez de exigir código exato ou substring literal do nome,
+    a dor #1 encontrada no sistema real (busca só por código/nome exato)."""
+    from finrag.corpus import Chunk
+    from finrag.embeddings import SemanticIndex
+    chunks = [
+        Chunk(doc_id=cod, chunk_id=0,
+             text=f"{f['fundo']['nome']} {f['fundo'].get('classe', '')} benchmark {f['fundo'].get('benchmark', '')}",
+             source=cod)
+        for cod, f in fundos.items()
+    ]
+    indice = SemanticIndex(embed_fn=embed_fn)
+    indice.build(chunks)
+    return indice
 
 
 def _detectar_fundo_citado(pergunta: str, fundos: dict) -> str | None:
@@ -179,6 +232,23 @@ def _tool_resolver_fundo(fundos: dict, args: dict) -> dict:
     return {"codigo": cod} if cod else {"erro": f"fundo '{args.get('nome')}' não encontrado"}
 
 
+def _obter_contribuicoes_db(fundo_codigo: str, periodo_label: str, dimensao: str) -> list[dict]:
+    """Tenta buscar a dimensão no Postgres da Meta 1/2; devolve lista vazia
+    (nunca levanta) se o banco não estiver configurado/alcançável — mesmo
+    princípio de degradação graciosa do resto do código (Ollama/Groq/RSS):
+    o copiloto não pode quebrar por causa de uma dependência opcional."""
+    try:
+        from db.repo import obter_contribuicoes_dimensao
+        from db.session import SessionLocal
+        db = SessionLocal()
+        try:
+            return obter_contribuicoes_dimensao(db, fundo_codigo, periodo_label, dimensao)
+        finally:
+            db.close()
+    except Exception:
+        return []
+
+
 def _tool_obter_atribuicao(fundos: dict, args: dict) -> dict:
     cod = _match_fundo(fundos, args.get("fundo", "")) or args.get("fundo")
     f = fundos.get(cod)
@@ -194,12 +264,18 @@ def _tool_obter_atribuicao(fundos: dict, args: dict) -> dict:
 
     avisos = []
     if dimensao != "estrategia":
-        avisos.append(
-            f"Dimensão '{DIMENSOES_LABEL.get(dimensao, dimensao)}' ainda não está disponível "
-            "na base de demonstração — mostrando por Estratégia (na integração real, essa "
-            "dimensão vem diretamente da plataforma de atribuição)."
-        )
-        dimensao = "estrategia"
+        dados_db = _obter_contribuicoes_db(cod, periodo, dimensao)
+        if dados_db:
+            estrategias = dados_db
+            if isinstance(top_n, int) and top_n > 0:
+                estrategias = sorted(estrategias, key=lambda e: abs(e["contribuicao_pp"]), reverse=True)[:top_n]
+        else:
+            avisos.append(
+                f"Dimensão '{DIMENSOES_LABEL.get(dimensao, dimensao)}' ainda não está disponível "
+                "na base de demonstração — mostrando por Estratégia (na integração real, essa "
+                "dimensão vem diretamente da plataforma de atribuição)."
+            )
+            dimensao = "estrategia"
     if periodo_diverge:
         avisos.append(f"Período disponível na demo: {periodo}.")
     if bench_diverge:
@@ -237,6 +313,37 @@ def _tool_obter_resumo(fundos: dict, args: dict) -> dict:
     }
 
 
+def _tool_comparar_periodos(fundos: dict, args: dict) -> dict:
+    cod = _match_fundo(fundos, args.get("fundo", "")) or args.get("fundo")
+    f = fundos.get(cod)
+    if not f:
+        return {"erro": f"fundo '{args.get('fundo')}' não encontrado"}
+    dimensao = _resolver_dimensao(args.get("dimensao"))
+    try:
+        from db.repo import comparar_periodos_dimensao
+        from db.session import SessionLocal
+        db = SessionLocal()
+        try:
+            comparacao = comparar_periodos_dimensao(db, cod, dimensao)
+        finally:
+            db.close()
+    except Exception:
+        comparacao = None
+
+    if comparacao is None:
+        return {
+            "fundo": cod, "nome_fundo": f["fundo"]["nome"],
+            "erro": (
+                "Comparação entre períodos ainda não está disponível na base de "
+                "demonstração — precisa de pelo menos 2 períodos carregados com essa "
+                "dimensão (na integração real, isso vem do histórico da plataforma)."
+            ),
+        }
+    comparacao["fundo"] = cod
+    comparacao["nome_fundo"] = f["fundo"]["nome"]
+    return comparacao
+
+
 def _tool_dispatch(nome: str, args: dict, fundos: dict) -> dict:
     if nome == "resolver_fundo":
         return _tool_resolver_fundo(fundos, args)
@@ -246,6 +353,8 @@ def _tool_dispatch(nome: str, args: dict, fundos: dict) -> dict:
         return _tool_obter_serie(fundos, args)
     if nome == "obter_resumo":
         return _tool_obter_resumo(fundos, args)
+    if nome == "comparar_periodos":
+        return _tool_comparar_periodos(fundos, args)
     return {"erro": f"ferramenta desconhecida: {nome}"}
 
 
@@ -330,7 +439,8 @@ def analisar(*, pergunta: str, fundo_ativo: str, backend, fundos: dict, max_turn
         for tc in result["tool_calls"]:
             out = _tool_dispatch(tc["name"], tc["arguments"], fundos)
             tool_trace.append({"tool": tc["name"], "args": tc["arguments"]})
-            if tc["name"] in ("obter_atribuicao", "obter_serie", "obter_resumo") and "erro" not in out:
+            if tc["name"] in ("obter_atribuicao", "obter_serie", "obter_resumo",
+                             "comparar_periodos") and "erro" not in out:
                 consulta_echo.setdefault("fundo", out.get("fundo"))
                 if out.get("periodo"):
                     consulta_echo["periodo"] = out["periodo"]
