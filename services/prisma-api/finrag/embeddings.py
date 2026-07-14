@@ -79,6 +79,12 @@ class SemanticIndex:
         with open(folder / "chunks.pkl", "rb") as fh:
             self._chunks = pickle.load(fh)
 
+    @property
+    def chunks(self) -> list[Chunk]:
+        """Exponho os chunks indexados porque notei que hybrid_search
+        precisa da mesma lista pra rodar o BM25 lado a lado do FAISS."""
+        return self._chunks
+
 
 def bm25_search(query: str, chunks: list[Chunk], k: int = 4) -> list[tuple[Chunk, float]]:
     """Uso BM25 como baseline lexical para contrastar com a busca semântica."""
@@ -88,3 +94,33 @@ def bm25_search(query: str, chunks: list[Chunk], k: int = 4) -> list[tuple[Chunk
     scores = bm25.get_scores(query.lower().split())
     ranked = sorted(zip(chunks, scores), key=lambda p: p[1], reverse=True)
     return [(c, float(s)) for c, s in ranked[:k]]
+
+
+def hybrid_search(query: str, index: SemanticIndex, chunks: list[Chunk],
+                  k: int = 4) -> list[tuple[Chunk, float]]:
+    """Fundo semântica (FAISS) e lexical (BM25) por Reciprocal Rank Fusion.
+
+    Decidi fundir por RANKING (RRF), não por soma de scores brutos, porque
+    notei que cosseno normalizado (0-1) e BM25 (escala aberta, sem teto) não
+    são comparáveis diretamente — somar os dois distorceria a fusão a favor
+    de qualquer um que tenha escala maior.
+    """
+    n = len(chunks)
+    if n == 0:
+        return []
+    semantic_ranked = [c for c, _ in index.search(query, k=n)]
+    lexical_ranked = [c for c, _ in bm25_search(query, chunks, k=n)]
+
+    def _key(c: Chunk) -> tuple[str, int]:
+        return (c.doc_id, c.chunk_id)
+
+    scores: dict[tuple[str, int], float] = {}
+    lookup: dict[tuple[str, int], Chunk] = {}
+    for ranked in (semantic_ranked, lexical_ranked):
+        for rank, chunk in enumerate(ranked, start=1):
+            ck = _key(chunk)
+            lookup[ck] = chunk
+            scores[ck] = scores.get(ck, 0.0) + 1.0 / (60 + rank)
+
+    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    return [(lookup[ck], score) for ck, score in ordered[:k]]

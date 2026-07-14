@@ -9,9 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .corpus import Chunk
-from .embeddings import SemanticIndex
-from .guardrails import sanitize_chunks
+from .embeddings import SemanticIndex, bm25_search, hybrid_search
+from .guardrails import detect_injection, sanitize_chunks
 from .models import LLMClient
+
+BLOCKED_QUESTION_ANSWER = (
+    "Pergunta contém padrão suspeito de instrução; não processada."
+)
 
 
 @dataclass
@@ -20,6 +24,7 @@ class RAGResult:
     contexts: list[Chunk] = field(default_factory=list)
     blocked: list[Chunk] = field(default_factory=list)
     used_context: bool = True
+    question_blocked: bool = False
 
 
 def build_augmented_prompt(question: str, contexts: list[Chunk]) -> str:
@@ -37,12 +42,33 @@ def build_augmented_prompt(question: str, contexts: list[Chunk]) -> str:
 
 def answer(question: str, index: SemanticIndex, llm: LLMClient, *,
            k: int = 4, use_context: bool = True,
-           guardrail: bool = True) -> RAGResult:
-    """Executo o pipeline; sem contexto, gero direto (baseline para comparação)."""
+           guardrail: bool = True, retrieval: str = "hybrid") -> RAGResult:
+    """Executo o pipeline; sem contexto, gero direto (baseline para comparação).
+
+    Decidi rodar o guardrail sobre a PERGUNTA antes de decidir use_context
+    porque notei que um documento não é a única superfície de ataque: o
+    próprio usuário pode digitar uma instrução maliciosa direto na pergunta,
+    e o caminho use_context=False não passava por nenhuma sanitização.
+
+    `retrieval` aceita "hybrid" (padrão, RRF semântico+BM25), "semantic" ou
+    "lexical" — mantive as opções isoladas porque o notebook já compara os
+    três lados a lado e eu não quero quebrar essa comparação.
+    """
+    if guardrail and detect_injection(question):
+        return RAGResult(answer=BLOCKED_QUESTION_ANSWER, contexts=[],
+                         blocked=[], used_context=use_context,
+                         question_blocked=True)
     if not use_context:
         return RAGResult(answer=llm.generate(question, temperature=0.0),
                          contexts=[], blocked=[], used_context=False)
-    retrieved = [c for c, _ in index.search(question, k=k)]
+    if retrieval == "hybrid":
+        retrieved = [c for c, _ in hybrid_search(question, index, index.chunks, k=k)]
+    elif retrieval == "lexical":
+        retrieved = [c for c, _ in bm25_search(question, index.chunks, k=k)]
+    elif retrieval == "semantic":
+        retrieved = [c for c, _ in index.search(question, k=k)]
+    else:
+        raise ValueError(f"retrieval desconhecido: {retrieval!r}")
     if guardrail:
         safe, blocked = sanitize_chunks(retrieved)
     else:

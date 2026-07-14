@@ -8,6 +8,7 @@ faiss-cpu==1.8.0
 sentence-transformers==3.0.1   # fallback de embeddings quando o Ollama não está disponível
 rank-bm25==0.2.2
 groq==1.5.0                    # backend "Nuvem" (opcional; requer GROQ_API_KEY)
+feedparser==6.0.11              # radar de mercado: RSS bilíngue EN+PT, com fallback pro seed estático
 pytest
 
 # Dependências extras APENAS para reexecutar a classificação offline de notícias:

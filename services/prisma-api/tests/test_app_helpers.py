@@ -6,7 +6,7 @@ def test_comparativa_por_nomes():
 
 
 def test_comparativa_palavra_compare_sem_nomes_inclui_todos():
-    assert set(app.e_comparativa("compare os fundos")) == {"ALFA-33", "BETA-71", "GAMA-12"}
+    assert set(app.e_comparativa("compare os fundos")) == set(app.NOMES_FUNDOS.values())
 
 
 def test_nao_comparativa():

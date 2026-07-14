@@ -282,14 +282,20 @@ function BlocoView({ bloco }: { bloco: BlocoGrafico }) {
         </Tooltip>
       </div>
       {bloco.chart === "waterfall" && (
-        <Waterfall
-          estrategias={bloco.dados.estrategias}
-          total={bloco.dados.total}
-          benchmark={bloco.dados.benchmark}
-          benchLabel={bloco.dados.benchLabel}
-        />
+        <div className="h-[300px]">
+          <Waterfall
+            estrategias={bloco.dados.estrategias}
+            total={bloco.dados.total}
+            benchmark={bloco.dados.benchmark}
+            benchLabel={bloco.dados.benchLabel}
+          />
+        </div>
       )}
-      {bloco.chart === "linha" && <PerformanceLine serie={bloco.dados.serie} />}
+      {bloco.chart === "linha" && (
+        <div className="h-[240px]">
+          <PerformanceLine serie={bloco.dados.serie} />
+        </div>
+      )}
       {bloco.tipo === "kpis" && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi label="Retorno" value={pct(bloco.dados.resumo.retorno_cota)} />
