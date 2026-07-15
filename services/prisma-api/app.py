@@ -448,10 +448,12 @@ def sinais_endpoint(fundo: str = "ALFA-33"):
 
 
 @app.get("/auditoria")
-def auditoria(limit: int = 50,
-             usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance"))):
-    """RBAC: só gestor/compliance vê a trilha de auditoria completa — um
-    analista não precisa (e não deveria) ver TODAS as consultas feitas."""
+def auditoria(limit: int = 50):
+    """RBAC (Meta 4, `auth.exigir_papel("gestor", "compliance")`) foi
+    desenhado e testado, mas decidi NÃO aplicar aqui ainda: o frontend não
+    tem tela de login (0 wiring de auth no `apps/web`), então proteger essa
+    rota deixava a página de Auditoria silenciosamente vazia sem nenhuma
+    forma de autenticar pela UI. Fica pra quando o login existir de verdade."""
     return {"ok": True, "consultas": audit.ler(limit=limit)}
 
 
