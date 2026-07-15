@@ -2,19 +2,41 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
 
 jobs:
   api:
     runs-on: ubuntu-latest
+    services:
+      # Meta 4 adicionou testes que precisam de Postgres de verdade (db/repo,
+      # auth, multi-tenant, auditoria) — não dá mais pra rodar só com a lista
+      # mínima de deps + sem banco.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: prisma
+          POSTGRES_PASSWORD: prisma_dev
+          POSTGRES_DB: prisma
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Dependências mínimas da API
-        run: pip install fastapi uvicorn requests "pydantic==2.13.4" "numpy==1.26.4" faiss-cpu rank-bm25 pytest
+      - name: Dependências da API
+        run: pip install -r requirements.txt
+      - name: Criar banco de teste (prisma_test)
+        run: PGPASSWORD=prisma_dev psql -h localhost -p 55432 -U prisma -d prisma -c "CREATE DATABASE prisma_test;"
+      - name: Aplicar migrations
+        working-directory: services/prisma-api
+        run: python -m alembic upgrade head
       - name: Testes
         working-directory: services/prisma-api
         run: python -m pytest tests/ -v
@@ -34,3 +56,6 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           ./node_modules/.bin/tsc --noEmit
+      - name: Testes (Vitest)
+        working-directory: apps/web
+        run: ./node_modules/.bin/vitest run
