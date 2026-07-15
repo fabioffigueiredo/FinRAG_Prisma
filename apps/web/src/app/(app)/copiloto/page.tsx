@@ -262,7 +262,7 @@ function ReasoningEcho({ echo }: { echo: AnaliseResp["consulta_echo"] }) {
 }
 
 /** Renderiza um bloco estruturado (gráfico ou KPIs) devolvido pelo agente. */
-function BlocoView({ bloco }: { bloco: BlocoGrafico }) {
+export function BlocoView({ bloco }: { bloco: BlocoGrafico }) {
   return (
     <div className="rounded-xl border border-border bg-background/40 p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
