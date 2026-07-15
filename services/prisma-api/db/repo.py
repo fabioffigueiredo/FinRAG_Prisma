@@ -32,6 +32,7 @@ from .models import (
     VarClasseDiaria,
 )
 
+
 DIMENSOES = [
     "estrategia", "grupo_contabil", "supergrupo", "privados",
     "renda_variavel", "renda_fixa", "vencimento", "ativos",
@@ -279,3 +280,10 @@ def _ultimo_cota(db: Session, fundo_codigo: str, periodo_label: str) -> float | 
         ).order_by(SerieDiaria.data.desc()).limit(1)
     )
     return ponto.cota if ponto else None
+
+
+def listar_fundos_da_gestora(db: Session, gestora_id: int) -> list[Fundo]:
+    """Meta 4 — isolamento multi-tenant: só devolve fundos da gestora do
+    usuário autenticado. É essa função (não uma checagem espalhada em cada
+    rota) que garante que a Gestora A nunca vê os fundos da Gestora B."""
+    return list(db.scalars(select(Fundo).where(Fundo.gestora_id == gestora_id).order_by(Fundo.codigo)))

@@ -1,6 +1,17 @@
 import json
 
+import pytest
+
 import audit
+
+
+@pytest.fixture(autouse=True)
+def _forcar_arquivo(monkeypatch):
+    """Todos os testes deste arquivo testam o FALLBACK de arquivo — força
+    isso independente de o Postgres de dev estar rodando ou não nesta
+    máquina (o caminho Postgres tem seus próprios testes, em
+    test_audit_postgres.py)."""
+    monkeypatch.setattr(audit, "_FORCAR_ARQUIVO", True)
 
 
 def test_registrar_e_ler(tmp_path, monkeypatch):
