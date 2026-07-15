@@ -42,7 +42,7 @@ def _load_env() -> None:
 
 _load_env()
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -66,6 +66,9 @@ import audit                                                             # noqa:
 import agent as agente                                                   # noqa: E402
 from radar import carregar_noticias, agregar                             # noqa: E402
 from sinais import gerar_sinais, AVISO_LEGAL, MODELO_VERSAO              # noqa: E402
+import auth                                                              # noqa: E402
+from db.session import get_db                                           # noqa: E402
+import observability                                                     # noqa: E402
 
 app = FastAPI(title="Prisma API", version="0.1.0")
 app.add_middleware(
@@ -113,6 +116,7 @@ def _corpus_docs():
 
 @app.on_event("startup")
 def _startup() -> None:
+    observability.configurar_logging()
     import embed as _embed
     embed_fn = get_embed_fn()
     STATE["embed"] = f"{_embed.EMBED_MODEL} (Ollama)" if embed_fn else "sentence-transformers (fallback)"
@@ -149,6 +153,33 @@ class IngestReq(BaseModel):
     nome: str = "Export"
     csv: str
     benchmark_pp: float = 3.10
+
+
+class LoginReq(BaseModel):
+    matricula: str
+    senha: str
+
+
+class LoginResp(BaseModel):
+    token: str
+    nome: str
+    papel: str
+    gestora_id: int
+
+
+@app.post("/auth/login", response_model=LoginResp)
+def login(req: LoginReq, db=Depends(get_db)):
+    usuario = auth.autenticar(db, req.matricula, req.senha)
+    if usuario is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="matrícula ou senha inválidas")
+    return LoginResp(token=auth.criar_token(usuario), nome=usuario.nome,
+                     papel=usuario.papel.value, gestora_id=usuario.gestora_id)
+
+
+@app.get("/auth/me")
+def quem_sou_eu(usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual)):
+    return {"matricula": usuario.matricula, "nome": usuario.nome,
+            "papel": usuario.papel, "gestora_id": usuario.gestora_id}
 
 
 def _parse_csv_contribuicoes(texto: str) -> list[dict]:
@@ -195,18 +226,31 @@ def _fund_chunk(f: dict):
     return Chunk(doc_id=f"dados_{cod}", chunk_id=0, text=_resumo_texto(f), source=f"dados:{cod}")
 
 
-def _gerar_seguro(backend: str, prompt: str, **kw) -> tuple[str, bool]:
+def _gerar_seguro(backend: str, prompt: str, rota: str = "", **kw) -> tuple[str, bool]:
     """Gera texto; se o backend falhar (ex.: Ollama ausente na VPS, timeout de
-    nuvem), degrada para o MockLLM e sinaliza. Nunca deixa a demo cair."""
+    nuvem), degrada para o MockLLM e sinaliza. Nunca deixa a demo cair.
+
+    Meta 4: registra a chamada em observability (tokens/custo estimados,
+    latência) — é o único ponto de saída de texto pro /narrativa e
+    /perguntar, então é o lugar certo pra medir sem duplicar em cada rota.
+    """
+    t0 = time.perf_counter()
     try:
-        return get_backend(backend).generate(prompt, **kw).strip(), False
+        texto = get_backend(backend).generate(prompt, **kw).strip()
+        degradado = False
     except Exception:
         from finrag.models import MockLLM
         texto = MockLLM(
             "No período, o resultado do fundo foi sustentado principalmente pelo "
             "carrego das estratégias de crédito privado e juros."
         ).generate(prompt).strip()
-        return texto, True
+        degradado = True
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+    observability.registrar_chamada_llm(
+        backend=("mock" if degradado else backend), modelo=backend, prompt=prompt,
+        resposta=texto, latency_ms=latency_ms, rota=rota,
+    )
+    return texto, degradado
 
 
 @app.get("/health")
@@ -237,7 +281,7 @@ def narrativa(req: NarrativaReq):
         f"NÚMEROS DO FUNDO:\n{_resumo_texto(f)}\n\n"
         f"REGRAS DE ATRIBUIÇÃO (contexto):\n{regras}" + INSTRUCAO_ESCOPO + "\n\nComentário:"
     )
-    texto, degradado = _gerar_seguro(req.backend, prompt, temperature=0.1, max_tokens=220)
+    texto, degradado = _gerar_seguro(req.backend, prompt, rota="/narrativa", temperature=0.1, max_tokens=220)
     lat = int((time.perf_counter() - t0) * 1000)
     fontes = [c.source for c, _ in retr]
     audit.registrar(rota="/narrativa", fundo=f["fundo"]["codigo"], pergunta="(narrativa do período)",
@@ -280,7 +324,7 @@ def perguntar(req: PerguntaReq):
     safe, blocked = sanitize_chunks([c for c, _ in retr])
     contexto = fund_chunks + safe
     prompt = build_augmented_prompt(req.pergunta, contexto) + INSTRUCAO_ESCOPO
-    resposta, _deg = _gerar_seguro(req.backend, prompt, temperature=0.1, max_tokens=380)
+    resposta, _deg = _gerar_seguro(req.backend, prompt, rota="/perguntar", temperature=0.1, max_tokens=380)
     lat = int((time.perf_counter() - t0) * 1000)
     citacoes = [
         {"fonte": c.source, "trecho": c.text[:160].strip(),
@@ -404,5 +448,20 @@ def sinais_endpoint(fundo: str = "ALFA-33"):
 
 
 @app.get("/auditoria")
-def auditoria(limit: int = 50):
+def auditoria(limit: int = 50,
+             usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance"))):
+    """RBAC: só gestor/compliance vê a trilha de auditoria completa — um
+    analista não precisa (e não deveria) ver TODAS as consultas feitas."""
     return {"ok": True, "consultas": audit.ler(limit=limit)}
+
+
+@app.get("/fundos")
+def listar_fundos(usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual), db=Depends(get_db)):
+    """Isolamento multi-tenant: cada gestora só vê os próprios fundos —
+    ver `db/repo.py::listar_fundos_da_gestora`."""
+    from db.repo import listar_fundos_da_gestora
+    fundos = listar_fundos_da_gestora(db, usuario.gestora_id)
+    return {"ok": True, "fundos": [
+        {"codigo": f.codigo, "nome": f.nome, "classe": f.classe, "benchmark": f.benchmark_padrao}
+        for f in fundos
+    ]}

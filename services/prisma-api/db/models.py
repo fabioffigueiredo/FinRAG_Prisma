@@ -58,6 +58,42 @@ class ClasseVar(str, enum.Enum):
     TOTAL = "total"
 
 
+class Papel(str, enum.Enum):
+    """Os 3 papéis de RBAC da Meta 4 — espelha os perfis reais que um
+    sistema desse porte precisa (analista opera, gestor decide, compliance
+    audita), não uma lista genérica de permissões."""
+    ANALISTA = "analista"
+    GESTOR = "gestor"
+    COMPLIANCE = "compliance"
+
+
+class Gestora(Base):
+    """O "tenant" da Meta 4 — cada gestora só vê seus próprios fundos.
+    Decidi isolar por FK simples (não schema-per-tenant) porque é o
+    suficiente pra provar a separação com poucas gestoras/fundos; schema
+    separado só valeria a pena em escala bem maior."""
+    __tablename__ = "gestora"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(120), unique=True)
+
+    usuarios: Mapped[list["Usuario"]] = relationship(back_populates="gestora")
+
+
+class Usuario(Base):
+    __tablename__ = "usuario"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    matricula: Mapped[str] = mapped_column(String(20), unique=True)
+    nome: Mapped[str] = mapped_column(String(120))
+    senha_hash: Mapped[str] = mapped_column(String(200))
+    papel: Mapped[Papel] = mapped_column(Enum(Papel, name="papel_enum"))
+    gestora_id: Mapped[int] = mapped_column(ForeignKey("gestora.id"))
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    gestora: Mapped["Gestora"] = relationship(back_populates="usuarios")
+
+
 class Fundo(Base):
     __tablename__ = "fundo"
 
@@ -66,6 +102,10 @@ class Fundo(Base):
     cnpj: Mapped[str] = mapped_column(String(40))
     classe: Mapped[str] = mapped_column(String(100))
     benchmark_padrao: Mapped[str] = mapped_column(String(40))
+    # nullable porque o dado sintético da Meta 1 foi criado antes da Meta 4
+    # existir — um fundo sem gestora é tratado como "sem tenant" (visível só
+    # a quem não tem isolamento, ex. scripts internos), nunca exposto via API.
+    gestora_id: Mapped["int | None"] = mapped_column(ForeignKey("gestora.id"), nullable=True)
 
     periodos: Mapped[list["Periodo"]] = relationship(back_populates="fundo")
 
@@ -190,6 +230,25 @@ class Benchmark(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     nome: Mapped[str] = mapped_column(String(60), unique=True)
     descricao: Mapped[str] = mapped_column(String(200), default="")
+
+
+class AuditoriaEvento(Base):
+    """Meta 4 — substitui o JSONL local de `audit.py` por uma trilha
+    consultável no banco. Guardo só o HASH da resposta (nunca o texto em
+    claro), mesma decisão de privacidade que o JSONL já tinha."""
+    __tablename__ = "auditoria_evento"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    rota: Mapped[str] = mapped_column(String(60))
+    fundo: Mapped[str] = mapped_column(String(20))
+    pergunta: Mapped[str] = mapped_column(String)
+    backend: Mapped[str] = mapped_column(String(40))
+    latency_ms: Mapped[int] = mapped_column()
+    fontes_json: Mapped[str] = mapped_column(String, default="[]")
+    bloqueados_json: Mapped[str] = mapped_column(String, default="[]")
+    resposta_hash: Mapped[str] = mapped_column(String(16))
+    extra_json: Mapped["str | None"] = mapped_column(String, nullable=True)
 
 
 class BenchmarkPeso(Base):

@@ -12,6 +12,8 @@ feedparser==6.0.11              # radar de mercado: RSS bilíngue EN+PT, com fal
 sqlalchemy==2.0.36              # Meta 1: fundação de dados (schema Fundo/Estrategia SCD2/VaR/Benchmark)
 alembic==1.14.0                 # Meta 1: migrations versionadas do schema
 psycopg[binary]==3.2.3          # Meta 1: driver Postgres
+pyjwt==2.9.0                     # Meta 4: auth (JWT)
+bcrypt==4.2.1                    # Meta 4: hash de senha
 pytest
 
 # Dependências extras APENAS para reexecutar a classificação offline de notícias:
