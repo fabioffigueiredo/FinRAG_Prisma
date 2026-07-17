@@ -229,3 +229,59 @@ def test_rate_limit_de_5_por_minuto_em_verificar_2fa(client, db):
         assert resp.status_code == 401
     resp = client.post("/auth/2fa/verificar", json={"codigo": "000000"}, headers=_csrf_headers(client))
     assert resp.status_code == 429
+
+
+# --- reset de 2FA (perda de dispositivo) ------------------------------------
+
+def test_gestor_reseta_2fa_de_outro_usuario(client, db):
+    gestora, admin = _gestora_com_usuario(db, matricula="G2FA-ADMIN1")
+    alvo = Usuario(matricula="G2FA-ALVO1", nome="Alvo", senha_hash=auth.hash_senha("Senha-123!"),
+                  papel=Papel.GESTOR, gestora_id=gestora.id, ativo=True,
+                  totp_secret=pyotp.random_base32(), totp_ativado=True)
+    db.add(alvo)
+    db.flush()
+
+    _login(client, "G2FA-ADMIN1")
+    resp = client.post(f"/usuarios/{alvo.id}/resetar-2fa", headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    db.refresh(alvo)
+    assert alvo.totp_secret is None
+    assert alvo.totp_ativado is False
+
+
+def test_nao_pode_resetar_o_proprio_2fa(client, db):
+    # sem 2FA ativo no próprio ator de propósito — login em uma etapa só,
+    # o bloqueio de autoreset independe do estado de 2FA de quem chama.
+    _, admin = _gestora_com_usuario(db, matricula="G2FA-ADMIN2")
+
+    _login(client, "G2FA-ADMIN2")
+    resp = client.post(f"/usuarios/{admin.id}/resetar-2fa", headers=_csrf_headers(client))
+    assert resp.status_code == 400
+
+
+def test_analista_nao_pode_resetar_2fa(client, db):
+    gestora, _ = _gestora_com_usuario(db, matricula="G2FA-ADMIN3")
+    alvo = Usuario(matricula="G2FA-ALVO3", nome="Alvo", senha_hash=auth.hash_senha("Senha-123!"),
+                  papel=Papel.GESTOR, gestora_id=gestora.id, ativo=True,
+                  totp_secret=pyotp.random_base32(), totp_ativado=True)
+    analista = Usuario(matricula="A2FA-ADMIN3", nome="Analista", senha_hash=auth.hash_senha("Senha-123!"),
+                      papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True)
+    db.add_all([alvo, analista])
+    db.flush()
+
+    _login(client, "A2FA-ADMIN3")
+    resp = client.post(f"/usuarios/{alvo.id}/resetar-2fa", headers=_csrf_headers(client))
+    assert resp.status_code == 403
+
+
+def test_resetar_2fa_de_usuario_de_outra_gestora_e_rejeitado(client, db):
+    _, admin_a = _gestora_com_usuario(db, matricula="G2FA-ADMIN4", gestora_nome="Gestora 2FA A")
+    _, alvo_b = _gestora_com_usuario(db, matricula="G2FA-ALVO4", gestora_nome="Gestora 2FA B")
+    alvo_b.totp_secret = pyotp.random_base32()
+    alvo_b.totp_ativado = True
+    db.flush()
+
+    _login(client, "G2FA-ADMIN4")
+    resp = client.post(f"/usuarios/{alvo_b.id}/resetar-2fa", headers=_csrf_headers(client))
+    assert resp.status_code == 403

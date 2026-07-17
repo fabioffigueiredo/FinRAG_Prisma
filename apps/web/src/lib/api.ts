@@ -500,6 +500,21 @@ export async function revogarSessao(usuarioId: number): Promise<{ ok: boolean; e
   }
 }
 
+export async function resetar2FA(usuarioId: number): Promise<{ ok: boolean; erro?: string }> {
+  try {
+    const res = await fetch(`${BASE}/usuarios/${usuarioId}/resetar-2fa`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível resetar o 2FA" };
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
 export type EventoAcesso = {
   timestamp: string;
   rota: string;

@@ -955,6 +955,32 @@ def revogar_sessao_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(au
     return {"ok": True}
 
 
+@app.post("/usuarios/{usuario_id}/resetar-2fa",
+        dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
+def resetar_2fa_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                     db=Depends(get_db)):
+    """Limpa segredo + ativação de 2FA de outro usuário — cobre o caso de
+    perda do celular/app autenticador, que hoje não tem autorrecuperação
+    (o próprio dono não consegue desativar o 2FA sozinho, de propósito).
+    Nunca no próprio usuário: reset de 2FA sempre passa por outro
+    gestor/compliance, pra manter accountability."""
+    from db.repo import buscar_usuario_por_id
+    alvo = buscar_usuario_por_id(db, usuario_id)
+    if alvo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
+    if alvo.gestora_id != usuario.gestora_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
+    if alvo.matricula == usuario.matricula:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="não é possível resetar o 2FA da própria conta")
+    alvo.totp_secret = None
+    alvo.totp_ativado = False
+    db.commit()
+    audit.registrar_evento(rota="/usuarios/resetar-2fa", ator_matricula=usuario.matricula,
+                           descricao=f"2FA resetado: {alvo.matricula}")
+    return {"ok": True}
+
+
 @app.get("/usuarios/{usuario_id}/historico-acessos",
         dependencies=[Depends(auth.exigir_papel("gestor", "compliance"))])
 def historico_acessos_rota(usuario_id: int, limit: int = 20,
