@@ -2,19 +2,40 @@
 #   docker network create prisma-net   # só na 1ª vez (ver deploy/DEPLOY.md)
 #   docker compose -f deploy/docker-compose.yml up -d --build
 services:
+  prisma-db:
+    image: postgres:16-alpine
+    container_name: prisma-db
+    environment:
+      POSTGRES_USER: prisma
+      POSTGRES_PASSWORD: ${PRISMA_DB_PASSWORD}
+      POSTGRES_DB: prisma
+    volumes:
+      - prisma-db-data:/var/lib/postgresql/data
+    networks: [prisma-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prisma"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   prisma-api:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
     container_name: prisma-api
     env_file:
-      - ../.env                          # GROQ_API_KEY, PRISMA_JWT_SECRET — só no servidor, nunca no git
+      - ../.env                          # GROQ_API_KEY, PRISMA_JWT_SECRET, PRISMA_DB_PASSWORD — só no servidor, nunca no git
     environment:
       PRISMA_ENV: production
       PRISMA_CORS_ORIGINS: https://wiki.ioi.ia.br
+      PRISMA_DATABASE_URL: postgresql+psycopg://prisma:${PRISMA_DB_PASSWORD}@prisma-db:5432/prisma
     ports:
       - "127.0.0.1:8000:8000"             # exposto só ao localhost; proxy reverso faz o resto
     networks: [prisma-net]
+    depends_on:
+      prisma-db:
+        condition: service_healthy
     restart: unless-stopped
 
   prisma-web:
@@ -36,3 +57,6 @@ networks:
   prisma-net:
     name: prisma-net
     external: true                       # criada uma vez fora do compose (ver DEPLOY.md)
+
+volumes:
+  prisma-db-data:
