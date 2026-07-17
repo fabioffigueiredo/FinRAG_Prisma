@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { getMe, logout as apiLogout, type MeResp } from "@/lib/api";
 
 type Sessao = {
@@ -13,6 +14,7 @@ type Sessao = {
 const SessionCtx = createContext<Sessao | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [usuario, setUsuario] = useState<MeResp | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +34,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   async function logout() {
     await apiLogout();
     setUsuario(null);
-    window.location.href = "/login";
+    // router.push (não `window.location.href`) — só o router do Next.js
+    // conhece o basePath em build time. Um `window.location.href = "/login"`
+    // é navegação de browser crua, sem prefixo: no deploy hospedado
+    // (basePath=/prisma) isso mandava o usuário pra wiki.ioi.ia.br/login,
+    // que não existe como rota do Prisma — caía no catch-all do Caddy e
+    // aterrissava no site do wiki interno (achado em produção).
+    router.push("/login");
+    router.refresh();
   }
 
   /** Reconsulta /auth/me — usado depois de trocar avatar/ativar 2FA pra
