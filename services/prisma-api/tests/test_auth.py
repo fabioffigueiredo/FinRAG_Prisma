@@ -1,8 +1,8 @@
 """Meta 4: hash de senha, JWT e RBAC."""
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
 
 import auth
 from db.models import Base, Gestora, Papel, Usuario
@@ -21,11 +21,25 @@ def engine():
 
 @pytest.fixture()
 def db(engine):
+    """Padrão SAVEPOINT (join a session into an external transaction) —
+    necessário desde que /auth/login passou a commitar (Meta 5, lockout);
+    ver .claude/skills/prisma-test-commit-isolation/. Um `db.commit()` da
+    aplicação só libera o savepoint, nunca a transação externa real, então
+    o rollback no teardown ainda descarta tudo."""
     connection = engine.connect()
     trans = connection.begin()
-    SessionLocal = sessionmaker(bind=connection, future=True)
-    session = SessionLocal()
+    session = Session(bind=connection, future=True)
+
+    nested = connection.begin_nested()
+
+    @event.listens_for(session, "after_transaction_end")
+    def _reabrir_savepoint(sess, transacao):
+        nonlocal nested
+        if not nested.is_active:
+            nested = connection.begin_nested()
+
     yield session
+
     session.close()
     if trans.is_active:
         trans.rollback()
@@ -97,3 +111,46 @@ def test_exigir_papel_bloqueia_papel_sem_permissao():
     with pytest.raises(HTTPException) as exc_info:
         checker(usuario)
     assert exc_info.value.status_code == 403
+
+
+def test_get_usuario_atual_prioriza_cookie_sobre_bearer(db):
+    """Quando os dois estão presentes, o cookie de sessão do navegador vence
+    — o Bearer é só fallback pra chamador não-browser (ver test_csrf.py)."""
+    from starlette.requests import Request as StarletteRequest
+
+    usuario_cookie = _usuario_teste(db, matricula="M-COOKIE")
+    usuario_bearer = _usuario_teste(db, matricula="M-BEARER")
+    token_cookie = auth.criar_token(usuario_cookie)
+    token_bearer = auth.criar_token(usuario_bearer)
+
+    scope = {
+        "type": "http",
+        "headers": [
+            (b"authorization", f"Bearer {token_bearer}".encode()),
+            (b"cookie", f"prisma_session={token_cookie}".encode()),
+        ],
+    }
+    request = StarletteRequest(scope)
+    from fastapi.security import HTTPAuthorizationCredentials
+    credenciais = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token_bearer)
+
+    resultado = auth.get_usuario_atual(request, credenciais, db=db)
+    assert resultado.matricula == "M-COOKIE"
+
+
+def test_jwt_secret_falha_rapido_em_producao_sem_variavel(monkeypatch):
+    """Fail-fast: PRISMA_ENV=production sem PRISMA_JWT_SECRET não pode subir
+    com o fallback de dev silenciosamente — reimporta o módulo pra reexecutar
+    a checagem de import-time."""
+    import importlib
+
+    monkeypatch.delenv("PRISMA_JWT_SECRET", raising=False)
+    monkeypatch.setenv("PRISMA_ENV", "production")
+    try:
+        with pytest.raises(RuntimeError, match="PRISMA_JWT_SECRET"):
+            importlib.reload(auth)
+    finally:
+        # sempre restaurar o módulo pro estado de dev antes de sair do teste,
+        # senão todo teste seguinte neste processo herda o RuntimeError.
+        monkeypatch.setenv("PRISMA_ENV", "dev")
+        importlib.reload(auth)

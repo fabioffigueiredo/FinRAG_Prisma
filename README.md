@@ -1,6 +1,6 @@
 # Prisma — Attribution Intelligence
 
-[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-13%20passing-5eead4)
+[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-165%20passing-5eead4)
 
 **A atribuição de performance, explicada.** O Prisma é uma camada cognitiva que
 transforma o resultado da atribuição de performance de fundos em **narrativa
@@ -24,7 +24,11 @@ comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse v
 - **Radar de Mercado**: notícias classificadas por sentimento dão o "porquê";
 - **Guardrails**: prompt-injection bloqueado + escopo anti-recomendação
   ("explica, não recomenda") — postura pensada para ambiente regulado;
-- **Auditoria**: cada consulta registrada (fontes, motor, latência, hash).
+- **Auditoria**: cada consulta registrada (fontes, motor, latência, hash);
+- **Conta e acesso nos padrões de instituição financeira**: login com lockout
+  e rate limiting, 2FA (TOTP) obrigatório para gestor/compliance, sessão
+  revogável a qualquer momento pelo admin, e trilha de auditoria de login/
+  logout/CRUD de usuário — ver [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
 
 **Um núcleo, dois adaptadores:** integrado (consome a API da plataforma de
 atribuição do cliente) ou standalone (ingere exports CSV).
@@ -33,16 +37,22 @@ atribuição do cliente) ou standalone (ingere exports CSV).
 |---|---|
 | ![Radar](docs/img/radar.png) | ![Auditoria](docs/img/auditoria.png) |
 
+| Login | Painel de usuários (admin) |
+|---|---|
+| ![Login](docs/img/login.png) | ![Usuários](docs/img/admin-usuarios.png) |
+
 ## Arquitetura
 
 ```
 apps/web/              Next.js 16 + Tailwind v4 (Base UI) — o dashboard
+apps/web/.../login/            tela de login (cookie httpOnly + CSRF)
+apps/web/.../admin/usuarios/   painel de usuários — só gestor/compliance
 services/prisma-api/   FastAPI — RAG + guardrails (núcleo finrag vendorizado)
 services/prisma-api/finrag/   retrieval FAISS, chunking, guardrails, LLM clients
 data/corpus/           regras de atribuição (corpus RAG, indexado com bge-m3)
 data/seed/             3 fundos-exemplo + notícias classificadas (sentimento)
 scripts/               classificação offline de notícias (pipeline TF-IDF+SVM)
-docs/                  deck de pitch (HTML), arquitetura, riscos, negócio
+docs/                  deck de pitch (HTML), arquitetura, riscos, negócio, segurança
 ```
 
 **A IA é flexível — local ou via chave de API.** Três backends selecionáveis na UI:
@@ -64,18 +74,26 @@ Passo a passo de todas as telas (~2 min) — clique na imagem para assistir no Y
 - **Recuperação (RAG):** Hit@4 = 100% · MRR 0,48 sobre golden queries do domínio —
   ver [`docs/METRICAS_RAG.md`](docs/METRICAS_RAG.md) (reproduza: `python scripts/avaliar_rag.py`).
 - **Governança de IA** (escopo, aprovação humana, auditoria, CVM): [`docs/GOVERNANCA_IA.md`](docs/GOVERNANCA_IA.md).
+- **Segurança** (autenticação, sessão, 2FA, auditoria, padrões BACEN 85/2021 + OWASP ASVS): [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
 - **Sinais** de apoio à decisão (probabilísticos, auditáveis, nunca recomendação):
   [`docs/GOVERNANCA_IA.md`](docs/GOVERNANCA_IA.md) §3.
 
 ## Como rodar
 
 **Pré-requisitos:** Node 22 + pnpm; Python 3.12 + [uv](https://docs.astral.sh/uv/);
-[Ollama](https://ollama.com) com `ollama pull llama3.1:8b` e `ollama pull bge-m3:567m`.
+[Ollama](https://ollama.com) com `ollama pull llama3.1:8b` e `ollama pull bge-m3:567m`;
+Docker (Postgres de dev — necessário pro login/admin, ver abaixo).
 
 ```bash
 # 0. Dependências
 uv venv .venv --python 3.12 && VIRTUAL_ENV=$PWD/.venv uv pip install -r requirements.txt
 cd apps/web && pnpm install && cd ../..
+
+# 0.1 Postgres de dev (login, admin de usuários, auditoria) + segredo do JWT
+docker compose -f docker-compose.dev.yml up -d
+export PRISMA_JWT_SECRET="$(openssl rand -hex 32)"   # obrigatório com PRISMA_ENV=production; em dev cai num default inseguro se omitido
+# export PRISMA_DEMO_MATRICULA="DEMO-MS"             # opcional — matrícula da conta demo do botão "Entrar com Microsoft" (simulação, ver docs/SEGURANCA.md)
+cd services/prisma-api && ../../.venv/bin/python -m alembic upgrade head && cd ../..
 
 # 1. API (porta 8000) — indexa o corpus com bge-m3 e pré-aquece o modelo
 cd services/prisma-api && ../../.venv/bin/python -m uvicorn app:app --port 8000
@@ -86,12 +104,16 @@ cd apps/web && ./node_modules/.bin/next dev -p 3100   # http://localhost:3100
 
 > Sem a API no ar, o frontend usa dados-exemplo (fallback) e a demo ainda funciona.
 > Sem Ollama, a API cai para embeddings sentence-transformers e o motor "Demo".
+> Sem Postgres, narrativa/copiloto/radar continuam funcionando (fallback), mas
+> **login e o painel de usuários exigem banco** — não há modo demo pra auth.
 > Reclassificar as notícias do radar (opcional):
 > `pip install -r scripts/finnlp_pipeline/requirements-finnlp.txt` e
 > `.venv/bin/python scripts/classificar_noticias.py --llm`
 
 **Testes:** `cd services/prisma-api && ../../.venv/bin/python -m pytest tests/ -v`
-(13 testes) · `cd apps/web && ./node_modules/.bin/tsc --noEmit`
+(156 testes, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
+`cd apps/web && ./node_modules/.bin/vitest run` (9 testes) ·
+`cd apps/web && ./node_modules/.bin/tsc --noEmit`
 
 ## Roteiro de demo (~5 min)
 1. **Cockpit** — números + Radar de Mercado + "Gerar ao vivo" (narrativa local).

@@ -31,14 +31,29 @@
            ▼                                 ▼
     [Prisma API — FastAPI :8000]  ← núcleo FinRAG (retrieval + guardrail)
       /narrativa  /perguntar  /radar  /auditoria  /ingerir
+      /auth/login  /auth/csrf  /auth/logout  /auth/me  /usuarios (RBAC)
       backends de IA pluggáveis: Ollama local (privado) · Groq · mock
            ▼
     [Prisma Web — Next.js :3100]
-      Cockpit · Atribuição · Copiloto · Radar · Relatório · Auditoria · Standalone
+      Login · Cockpit · Atribuição · Copiloto · Radar · Relatório · Auditoria
+      Standalone · Admin/Usuários (gestor/compliance)
 
 **Dois adaptadores, um núcleo:** integrado (consome a API da plataforma de
 atribuição do cliente) e standalone (ingere exports CSV/PDF). O POC demonstra
 ambos com dados fictícios.
+
+### Autenticação
+
+Login por `matrícula`+`senha` (bcrypt), sessão em cookie `httpOnly` (JWT,
+nunca `localStorage`) + cookie CSRF companheiro (`X-CSRF-Token`, double-submit)
+em toda mutação. Cookie host-only (sem `Domain=`) — funciona em dev com
+web/API em portas diferentes do mesmo host, e em produção onde web/API já
+dividem o mesmo domínio via Caddy. `middleware.ts`/`proxy.ts` do Next.js só
+checa presença do cookie (camada de UX); a autorização real é sempre o
+backend (`Depends(auth.get_usuario_atual)`/`exigir_papel` do FastAPI) — RBAC
+por papel (`analista`/`gestor`/`compliance`), multi-tenant por `gestora_id`.
+CORS restrito por `PRISMA_CORS_ORIGINS` (não mais `*`) e `PRISMA_JWT_SECRET`
+obrigatório em produção (a API falha no boot sem ele).
 
 ## Pontos de integração (produção)
 

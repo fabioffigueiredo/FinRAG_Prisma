@@ -7,12 +7,15 @@ import { Menu } from "lucide-react";
 import { Sheet, SheetTrigger, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { PrismaWordmark } from "@/components/brand/logo";
 import { CoreStatus } from "@/components/app/core-status";
-import { NAV } from "@/lib/nav";
+import { navParaPapel } from "@/lib/nav";
+import { useSession } from "@/components/app/session-context";
 import { cn } from "@/lib/utils";
 
 export function MobileNav() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  const { usuario } = useSession();
+  const nav = navParaPapel(usuario?.papel);
 
   // fecha ao navegar
   useEffect(() => {
@@ -41,7 +44,7 @@ export function MobileNav() {
         <SheetTitle className="sr-only">Navegação</SheetTitle>
 
         <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-2">
-          {NAV.map((sec) => (
+          {nav.map((sec) => (
             <div key={sec.grupo}>
               <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
                 {sec.grupo}

@@ -1,14 +1,17 @@
 """Meta 4 — critério de pronto, ponta a ponta: duas gestoras fictícias,
 cada uma com usuário e fundos próprios, login real (JWT) e isolamento
 comprovado através das ROTAS de verdade (não só a camada de repositório).
+
+Login vira uma chamada TestClient de verdade (não mais função direta) desde
+que /auth/login passou a exigir `request: Request` (rate limiting, Meta 5) —
+ver .claude/skills/prisma-test-commit-isolation/.
 """
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session
 
-import app as app_module
 import auth
-from app import LoginReq, listar_fundos, login
 from db.models import Base, Fundo, Gestora, Papel, Usuario
 from db.session import engine as _dev_engine
 
@@ -27,13 +30,37 @@ def engine():
 def db(engine):
     connection = engine.connect()
     trans = connection.begin()
-    SessionLocal = sessionmaker(bind=connection, future=True)
-    session = SessionLocal()
+    session = Session(bind=connection, future=True)
+
+    nested = connection.begin_nested()
+
+    @event.listens_for(session, "after_transaction_end")
+    def _reabrir_savepoint(sess, transacao):
+        nonlocal nested
+        if not nested.is_active:
+            nested = connection.begin_nested()
+
     yield session
+
     session.close()
     if trans.is_active:
         trans.rollback()
     connection.close()
+
+
+@pytest.fixture(scope="module")
+def test_app():
+    import app as app_module
+    with TestClient(app_module.app) as c:
+        yield app_module, c
+
+
+@pytest.fixture()
+def client(test_app, db):
+    app_module, c = test_app
+    app_module.app.dependency_overrides[app_module.get_db] = lambda: db
+    yield c
+    app_module.app.dependency_overrides.clear()
 
 
 def _duas_gestoras_com_fundos(db):
@@ -59,24 +86,21 @@ def _duas_gestoras_com_fundos(db):
     return usuario_a, usuario_b
 
 
-def test_login_e_isolamento_de_fundos_entre_duas_gestoras(db):
+def _login(client, matricula: str, senha: str) -> None:
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": matricula, "senha": senha},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code == 200, resp.text
+
+
+def test_login_e_isolamento_de_fundos_entre_duas_gestoras(client, db):
     _duas_gestoras_com_fundos(db)
 
-    resp_a = login(LoginReq(matricula="ANALISTA-A", senha="senha-a-123"), db=db)
-    resp_b = login(LoginReq(matricula="ANALISTA-B", senha="senha-b-123"), db=db)
+    _login(client, "ANALISTA-A", "senha-a-123")
+    codigos_a = {f["codigo"] for f in client.get("/fundos").json()["fundos"]}
 
-    payload_a = auth.decodificar_token(resp_a.token)
-    payload_b = auth.decodificar_token(resp_b.token)
-    usuario_atual_a = auth.UsuarioAtual(matricula=payload_a["sub"], nome=payload_a["nome"],
-                                       papel=payload_a["papel"], gestora_id=payload_a["gestora_id"])
-    usuario_atual_b = auth.UsuarioAtual(matricula=payload_b["sub"], nome=payload_b["nome"],
-                                       papel=payload_b["papel"], gestora_id=payload_b["gestora_id"])
-
-    fundos_a = listar_fundos(usuario=usuario_atual_a, db=db)
-    fundos_b = listar_fundos(usuario=usuario_atual_b, db=db)
-
-    codigos_a = {f["codigo"] for f in fundos_a["fundos"]}
-    codigos_b = {f["codigo"] for f in fundos_b["fundos"]}
+    _login(client, "ANALISTA-B", "senha-b-123")
+    codigos_b = {f["codigo"] for f in client.get("/fundos").json()["fundos"]}
 
     assert codigos_a == {"E2E-A1"}
     assert codigos_b == {"E2E-B1"}
@@ -84,9 +108,9 @@ def test_login_e_isolamento_de_fundos_entre_duas_gestoras(db):
     assert "E2E-A1" not in codigos_b
 
 
-def test_login_com_senha_errada_nao_gera_token(db):
+def test_login_com_senha_errada_nao_gera_token(client, db):
     _duas_gestoras_com_fundos(db)
-    from fastapi import HTTPException
-    with pytest.raises(HTTPException) as exc_info:
-        login(LoginReq(matricula="ANALISTA-A", senha="senha-errada"), db=db)
-    assert exc_info.value.status_code == 401
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": "ANALISTA-A", "senha": "senha-errada"},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code == 401

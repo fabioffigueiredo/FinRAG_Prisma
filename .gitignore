@@ -18,8 +18,14 @@ __pycache__/
 # Dados de execução (auditoria é gerada em runtime)
 data/audit/
 
+# Avatares de usuário — conteúdo enviado em runtime, não versionar
+services/prisma-api/static/avatars/*
+!services/prisma-api/static/avatars/.gitkeep
+
 # Ferramentas/editores locais
 .claude/
+.agents/
+skills-lock.json
 .vscode/
 .idea/
 

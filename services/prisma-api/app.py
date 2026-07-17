@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 
@@ -42,9 +43,16 @@ def _load_env() -> None:
 
 _load_env()
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
+
+from security_headers import SecurityHeadersMiddleware
 
 HERE = Path(__file__).resolve()
 PRISMA = HERE.parents[2]          # raiz do projeto prisma
@@ -71,12 +79,37 @@ from db.session import get_db                                           # noqa: 
 import observability                                                     # noqa: E402
 
 app = FastAPI(title="Prisma API", version="0.1.0")
+
+# Rate limiting (Meta 5) — backend em memória por padrão; produção
+# multi-instância precisaria de storage_uri="redis://..." compartilhado
+# (limitação de POC documentada em docs/SEGURANCA.md). Só registra o
+# state/exception-handler aqui; o middleware entra depois do CORS abaixo.
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Allowlist explícita (nunca "*") — obrigatório para cookies credenciados:
+# navegador rejeita Set-Cookie combinado com allow_origins wildcard.
+_CORS_ORIGENS = [o.strip() for o in os.environ.get(
+    "PRISMA_CORS_ORIGINS", "http://localhost:3100"
+).split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_CORS_ORIGENS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Registrados depois do CORS de propósito — no Starlette o middleware
+# registrado PRIMEIRO fica mais externo (envolve todo o resto), então o CORS
+# continua sendo o mais externo da pilha (preflight OPTIONS nunca passa por
+# rate-limit/headers de segurança antes do CORS resolver).
+app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Mount depois dos middlewares de propósito — CORS/headers de segurança
+# também devem valer pros arquivos estáticos (avatares).
+app.mount("/static", StaticFiles(directory=str(HERE.parent / "static")), name="static")
 
 STATE: dict = {"index": None, "embed": "?", "fundos": None, "noticias": None}
 
@@ -161,25 +194,314 @@ class LoginReq(BaseModel):
 
 
 class LoginResp(BaseModel):
-    token: str
+    token: "str | None" = None
     nome: str
     papel: str
     gestora_id: int
+    requer_2fa: bool = False
 
 
-@app.post("/auth/login", response_model=LoginResp)
-def login(req: LoginReq, db=Depends(get_db)):
+@app.get("/auth/csrf")
+def obter_csrf(response: Response):
+    """Bootstrap do cookie CSRF antes do login (resolve login-CSRF — a
+    própria página de login chama isso ao montar, antes de existir sessão)."""
+    return {"csrf_token": auth.emitir_csrf_cookie(response)}
+
+
+@app.post("/auth/login", response_model=LoginResp, dependencies=[Depends(auth.verificar_csrf)])
+def login(request: Request, req: LoginReq, response: Response, db=Depends(get_db)):
+    """Fininho de propósito: `@limiter.limit` usa `functools.wraps`, e como
+    este arquivo tem `from __future__ import annotations` (PEP 563), o
+    FastAPI resolveria a anotação string "LoginReq" usando o `__globals__`
+    do módulo `slowapi.extension` (onde a classe não existe) se o decorator
+    fosse aplicado direto aqui — vira 422 tratando `req` como query param.
+    Isolar a lógica de verdade numa função só do módulo Python evita que o
+    FastAPI precise introspectar a versão decorada."""
+    return _login_com_rate_limit(request, req, response, db)
+
+
+@limiter.limit("5/minute")
+def _login_com_rate_limit(request: Request, req: LoginReq, response: Response, db) -> LoginResp:
+    from sqlalchemy import select as _select
+
+    from db.models import Usuario as _Usuario
     usuario = auth.autenticar(db, req.matricula, req.senha)
+    # Sempre commita — mesmo em falha — pra persistir o contador de
+    # tentativas/bloqueio que `autenticar()` só marcou no objeto, sem commitar.
+    db.commit()
     if usuario is None:
+        alvo = db.scalar(_select(_Usuario).where(_Usuario.matricula == req.matricula))
+        bloqueado = alvo is not None and alvo.bloqueado_ate is not None
+        audit.registrar_evento(
+            rota="/auth/login", ator_matricula=req.matricula,
+            descricao="login falhou — conta bloqueada" if bloqueado else "login falhou",
+            extra={"bloqueado": True} if bloqueado else None,
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="matrícula ou senha inválidas")
+
+    if usuario.papel.value in ("gestor", "compliance") and usuario.totp_ativado:
+        # 2FA só é obrigatório pra gestor/compliance, e só depois de
+        # matriculado (totp_ativado) — sem isso, primeiro login nunca
+        # travaria antes de dar chance de configurar (ver Stage 16/ativar-2fa).
+        # Cookie separado, sem token utilizável: é isso que torna a 2ª etapa
+        # obrigatória de verdade, não só uma UX opcional.
+        auth.emitir_cookie_pre2fa(response, usuario)
+        audit.registrar_evento(rota="/auth/login", ator_matricula=usuario.matricula,
+                               descricao="login etapa 1/2 — aguardando código 2FA")
+        return LoginResp(nome=usuario.nome, papel=usuario.papel.value,
+                         gestora_id=usuario.gestora_id, requer_2fa=True)
+
+    auth.emitir_cookies_sessao(response, usuario)
+    audit.registrar_evento(rota="/auth/login", ator_matricula=usuario.matricula, descricao="login bem-sucedido")
     return LoginResp(token=auth.criar_token(usuario), nome=usuario.nome,
                      papel=usuario.papel.value, gestora_id=usuario.gestora_id)
+
+
+@app.post("/auth/logout")
+def logout(request: Request, response: Response):
+    # Não exige sessão válida (get_usuario_atual dá 401 nesse caso) — logout
+    # sem sessão continua sendo um no-op gracioso. Só tenta decodificar o
+    # cookie/Bearer, sem lançar, pra saber quem saiu na auditoria.
+    ator_matricula = None
+    try:
+        token = request.cookies.get(auth.COOKIE_SESSAO)
+        if token:
+            ator_matricula = auth.decodificar_token(token)["sub"]
+    except HTTPException:
+        pass
+    auth.limpar_cookies_sessao(response)
+    auth.limpar_cookie_pre2fa(response)
+    if ator_matricula:
+        audit.registrar_evento(rota="/auth/logout", ator_matricula=ator_matricula, descricao="logout")
+    return {"ok": True}
 
 
 @app.get("/auth/me")
 def quem_sou_eu(usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual)):
     return {"matricula": usuario.matricula, "nome": usuario.nome,
-            "papel": usuario.papel, "gestora_id": usuario.gestora_id}
+            "papel": usuario.papel, "gestora_id": usuario.gestora_id,
+            "email": usuario.email, "avatar_url": usuario.avatar_url,
+            "totp_ativado": usuario.totp_ativado,
+            "trocar_senha_no_proximo_login": usuario.trocar_senha_no_proximo_login}
+
+
+class TrocarSenhaReq(BaseModel):
+    senha_atual: str
+    senha_nova: str
+
+
+@app.post("/auth/senha", dependencies=[Depends(auth.verificar_csrf)])
+def trocar_senha_rota(req: TrocarSenhaReq, usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                      db=Depends(get_db)):
+    """Serve tanto a troca voluntária (Meu Perfil) quanto a obrigatória
+    (temp senha/`trocar_senha_no_proximo_login`) — mesmo contrato, dois
+    pontos de entrada no frontend."""
+    from db.models import Usuario as _Usuario
+    from senha_policy import validar_senha
+    alvo = db.get(_Usuario, usuario.id)
+    if alvo is None or not auth.verificar_senha(req.senha_atual, alvo.senha_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="senha atual incorreta")
+    violacoes = validar_senha(req.senha_nova)
+    if violacoes:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"senha não atende à política: {', '.join(violacoes)}")
+    alvo.senha_hash = auth.hash_senha(req.senha_nova)
+    alvo.trocar_senha_no_proximo_login = False
+    db.commit()
+    audit.registrar_evento(rota="/auth/senha", ator_matricula=usuario.matricula, descricao="senha alterada")
+    return {"ok": True}
+
+
+AVATAR_MAX_BYTES = 2 * 1024 * 1024  # 2MB — cap de propósito, sem resize (POC)
+
+
+def _detectar_extensao_imagem(cabecalho: bytes) -> str | None:
+    """Confere magic bytes, não Content-Type (fácil de forjar) — sem
+    dependência nova. Cobre só os 3 formatos que o upload aceita."""
+    if cabecalho[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if cabecalho[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if cabecalho[:4] == b"RIFF" and cabecalho[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+@app.post("/auth/avatar", dependencies=[Depends(auth.verificar_csrf)])
+async def upload_avatar(arquivo: UploadFile = File(...),
+                        usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                        db=Depends(get_db)):
+    """Sem resize/processamento — simplificação de POC, documentada em
+    docs/SEGURANCA.md. Sobrescreve o arquivo anterior: 'trocar minha foto'
+    deve substituir, não acumular."""
+    import re
+
+    from db.models import Usuario as _Usuario
+
+    conteudo = await arquivo.read(AVATAR_MAX_BYTES + 1)
+    if len(conteudo) > AVATAR_MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail="imagem maior que 2MB")
+    extensao = _detectar_extensao_imagem(conteudo[:12])
+    if extensao is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="formato inválido — use JPEG, PNG ou WEBP")
+
+    # Matrícula é definida pelo admin (não pelo próprio usuário), mas nunca
+    # confiamos em texto externo dentro de um path — mantém só caracteres
+    # seguros pra montar o nome do arquivo.
+    matricula_segura = re.sub(r"[^A-Za-z0-9_-]", "_", usuario.matricula)
+    diretorio = HERE.parent / "static" / "avatars"
+    diretorio.mkdir(parents=True, exist_ok=True)
+    for antigo in diretorio.glob(f"{matricula_segura}.*"):
+        antigo.unlink()
+    destino = diretorio / f"{matricula_segura}.{extensao}"
+    destino.write_bytes(conteudo)
+
+    alvo = db.get(_Usuario, usuario.id)
+    alvo.avatar_url = f"/static/avatars/{matricula_segura}.{extensao}"
+    db.commit()
+    audit.registrar_evento(rota="/auth/avatar", ator_matricula=usuario.matricula,
+                           descricao="avatar atualizado")
+    return {"avatar_url": alvo.avatar_url}
+
+
+class Iniciar2FAResp(BaseModel):
+    otpauth_uri: str
+    qr_base64: str
+
+
+@app.post("/auth/2fa/iniciar", response_model=Iniciar2FAResp, dependencies=[Depends(auth.verificar_csrf)])
+def iniciar_2fa(usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance")),
+                db=Depends(get_db)):
+    """Gera o segredo e devolve o QR — NÃO ativa ainda. Só
+    /auth/2fa/confirmar ativa, depois de provar que o usuário configurou
+    certo num app autenticador de verdade."""
+    import base64
+    import io
+
+    import pyotp
+    import qrcode
+
+    from db.models import Usuario as _Usuario
+
+    segredo = pyotp.random_base32()
+    alvo = db.get(_Usuario, usuario.id)
+    alvo.totp_secret = segredo
+    alvo.totp_ativado = False
+    db.commit()
+
+    uri = pyotp.totp.TOTP(segredo).provisioning_uri(name=usuario.matricula, issuer_name="Prisma")
+    imagem = qrcode.make(uri)
+    buffer = io.BytesIO()
+    imagem.save(buffer, format="PNG")
+    qr_base64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+
+    audit.registrar_evento(rota="/auth/2fa/iniciar", ator_matricula=usuario.matricula,
+                           descricao="2FA — enrollment iniciado")
+    return Iniciar2FAResp(otpauth_uri=uri, qr_base64=qr_base64)
+
+
+class Confirmar2FAReq(BaseModel):
+    codigo: str
+
+
+@app.post("/auth/2fa/confirmar", dependencies=[Depends(auth.verificar_csrf)])
+def confirmar_2fa(req: Confirmar2FAReq,
+                  usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance")),
+                  db=Depends(get_db)):
+    import pyotp
+
+    from db.models import Usuario as _Usuario
+    alvo = db.get(_Usuario, usuario.id)
+    if not alvo.totp_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="nenhum enrollment de 2FA em andamento — chame /auth/2fa/iniciar primeiro")
+    if not pyotp.TOTP(alvo.totp_secret).verify(req.codigo, valid_window=1):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="código inválido")
+    alvo.totp_ativado = True
+    db.commit()
+    audit.registrar_evento(rota="/auth/2fa/confirmar", ator_matricula=usuario.matricula,
+                           descricao="2FA ativado")
+    return {"ok": True}
+
+
+class Verificar2FAReq(BaseModel):
+    codigo: str
+
+
+@app.post("/auth/2fa/verificar", response_model=LoginResp, dependencies=[Depends(auth.verificar_csrf)])
+def verificar_2fa(request: Request, req: Verificar2FAReq, response: Response, db=Depends(get_db)):
+    """Fininho, mesmo motivo do /auth/login (ver skill
+    fastapi-slowapi-future-annotations): @limiter.limit direto numa rota
+    registrada quebraria a resolução do Pydantic model `Verificar2FAReq`."""
+    return _verificar_2fa_com_rate_limit(request, req, response, db)
+
+
+@limiter.limit("5/minute")
+def _verificar_2fa_com_rate_limit(request: Request, req: Verificar2FAReq, response: Response, db) -> LoginResp:
+    """Um TOTP de 6 dígitos é alvo de força bruta se não limitado — rate
+    limit próprio, separado do /auth/login."""
+    import pyotp
+
+    usuario = auth.obter_usuario_pre2fa(request, db)
+    if not usuario.totp_secret or not pyotp.TOTP(usuario.totp_secret).verify(req.codigo, valid_window=1):
+        audit.registrar_evento(rota="/auth/2fa/verificar", ator_matricula=usuario.matricula,
+                               descricao="código 2FA inválido")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="código inválido")
+
+    auth.limpar_cookie_pre2fa(response)
+    auth.emitir_cookies_sessao(response, usuario)
+    audit.registrar_evento(rota="/auth/2fa/verificar", ator_matricula=usuario.matricula,
+                           descricao="login etapa 2/2 — 2FA confirmado")
+    return LoginResp(token=auth.criar_token(usuario), nome=usuario.nome,
+                     papel=usuario.papel.value, gestora_id=usuario.gestora_id)
+
+
+PRISMA_DEMO_MATRICULA = os.environ.get("PRISMA_DEMO_MATRICULA", "DEMO-MS")
+
+
+@app.post("/auth/login-microsoft-demo", response_model=LoginResp, dependencies=[Depends(auth.verificar_csrf)])
+def login_microsoft_demo(request: Request, response: Response, db=Depends(get_db)):
+    """Fininho, mesmo motivo das outras rotas com rate limit (ver skill
+    fastapi-slowapi-future-annotations)."""
+    return _login_microsoft_demo_com_rate_limit(request, response, db)
+
+
+@limiter.limit("5/minute")
+def _login_microsoft_demo_com_rate_limit(request: Request, response: Response, db) -> LoginResp:
+    """NÃO é OAuth/OIDC real — não fala com Azure AD, não valida credencial
+    nenhuma. Sempre loga a MESMA conta demo fixa (get-or-create idempotente),
+    só pra mostrar o botão "Entrar com Microsoft" na demo. papel=ANALISTA de
+    propósito: mantém o clique único simples e nunca aciona 2FA."""
+    import secrets as _secrets
+
+    from sqlalchemy import select as _select
+
+    from db.models import Gestora as _Gestora
+    from db.models import Papel as _Papel
+    from db.models import Usuario as _Usuario
+    from db.repo import criar_usuario as _criar_usuario
+
+    usuario = db.scalar(_select(_Usuario).where(_Usuario.matricula == PRISMA_DEMO_MATRICULA))
+    if usuario is None:
+        gestora = db.scalar(_select(_Gestora).order_by(_Gestora.id).limit(1))
+        if gestora is None:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                detail="nenhuma gestora cadastrada — não é possível criar a conta demo")
+        senha_inutilizavel = auth.hash_senha(_secrets.token_urlsafe(32))
+        usuario = _criar_usuario(db, gestora_id=gestora.id, matricula=PRISMA_DEMO_MATRICULA,
+                                 nome="Conta Demo Microsoft", senha_hash=senha_inutilizavel,
+                                 papel=_Papel.ANALISTA)
+        db.commit()
+    elif not usuario.ativo:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="conta demo desativada")
+
+    auth.emitir_cookies_sessao(response, usuario)
+    audit.registrar_evento(rota="/auth/login-microsoft-demo", ator_matricula=usuario.matricula,
+                           descricao="login via Microsoft (simulação de demo)")
+    return LoginResp(token=auth.criar_token(usuario), nome=usuario.nome,
+                     papel=usuario.papel.value, gestora_id=usuario.gestora_id)
 
 
 def _parse_csv_contribuicoes(texto: str) -> list[dict]:
@@ -447,13 +769,10 @@ def sinais_endpoint(fundo: str = "ALFA-33"):
     return {"ok": True, "sinais": sinais, "aviso": AVISO_LEGAL, "modelo": MODELO_VERSAO}
 
 
-@app.get("/auditoria")
+@app.get("/auditoria", dependencies=[Depends(auth.exigir_papel("gestor", "compliance"))])
 def auditoria(limit: int = 50):
-    """RBAC (Meta 4, `auth.exigir_papel("gestor", "compliance")`) foi
-    desenhado e testado, mas decidi NÃO aplicar aqui ainda: o frontend não
-    tem tela de login (0 wiring de auth no `apps/web`), então proteger essa
-    rota deixava a página de Auditoria silenciosamente vazia sem nenhuma
-    forma de autenticar pela UI. Fica pra quando o login existir de verdade."""
+    """RBAC reativado — o frontend já tem login de verdade (cookie de
+    sessão + middleware/admin gate). Só gestor/compliance auditam."""
     return {"ok": True, "consultas": audit.ler(limit=limit)}
 
 
@@ -467,3 +786,184 @@ def listar_fundos(usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual), 
         {"codigo": f.codigo, "nome": f.nome, "classe": f.classe, "benchmark": f.benchmark_padrao}
         for f in fundos
     ]}
+
+
+class UsuarioResp(BaseModel):
+    id: int
+    matricula: str
+    nome: str
+    papel: str
+    gestora_id: int
+    gestora_nome: str
+    ativo: bool
+    email: "str | None" = None
+    telefone: "str | None" = None
+    avatar_url: "str | None" = None
+    totp_ativado: bool = False
+    trocar_senha_no_proximo_login: bool = False
+    bloqueado_ate: "datetime | None" = None
+    tentativas_falhas: int = 0
+
+
+class CriarUsuarioReq(BaseModel):
+    matricula: str
+    nome: str
+    papel: str
+    senha: str
+    trocar_senha_no_proximo_login: bool = False
+    email: "str | None" = None
+    telefone: "str | None" = None
+
+
+class AtualizarUsuarioReq(BaseModel):
+    """Update parcial — `matricula` e `gestora_id` de propósito não existem
+    aqui: são imutáveis por essa rota (ver Stage 3 do plano)."""
+    nome: str | None = None
+    papel: str | None = None
+    ativo: bool | None = None
+    senha: str | None = None
+    trocar_senha_no_proximo_login: bool | None = None
+    email: "str | None" = None
+    telefone: "str | None" = None
+
+
+def _usuario_resp(u) -> UsuarioResp:
+    return UsuarioResp(id=u.id, matricula=u.matricula, nome=u.nome,
+                       papel=u.papel.value, gestora_id=u.gestora_id,
+                       gestora_nome=u.gestora.nome, ativo=u.ativo,
+                       email=u.email, telefone=u.telefone, avatar_url=u.avatar_url,
+                       totp_ativado=u.totp_ativado,
+                       trocar_senha_no_proximo_login=u.trocar_senha_no_proximo_login,
+                       bloqueado_ate=u.bloqueado_ate, tentativas_falhas=u.tentativas_falhas)
+
+
+@app.get("/usuarios", dependencies=[Depends(auth.exigir_papel("gestor", "compliance"))])
+def listar_usuarios(usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual), db=Depends(get_db)):
+    """Só gestor/compliance administram usuários — nunca serializa
+    `senha_hash` (ver `_usuario_resp`)."""
+    from db.repo import listar_usuarios_da_gestora
+    usuarios = listar_usuarios_da_gestora(db, usuario.gestora_id)
+    return {"ok": True, "usuarios": [_usuario_resp(u) for u in usuarios]}
+
+
+@app.post("/usuarios", status_code=status.HTTP_201_CREATED,
+          dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
+def criar_usuario_rota(req: CriarUsuarioReq, usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                       db=Depends(get_db)):
+    """`gestora_id` NUNCA vem do payload — sempre o da gestora de quem está
+    logado, senão um gestor mal-intencionado (ou um bug de cliente) poderia
+    criar usuário em outro tenant."""
+    from sqlalchemy.exc import IntegrityError
+
+    from db.models import Papel
+    from db.repo import criar_usuario
+    from senha_policy import validar_senha
+    try:
+        papel = Papel(req.papel)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"papel inválido — use um de {[p.value for p in Papel]}")
+    violacoes = validar_senha(req.senha)
+    if violacoes:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"senha não atende à política: {', '.join(violacoes)}")
+    try:
+        novo = criar_usuario(db, gestora_id=usuario.gestora_id, matricula=req.matricula,
+                             nome=req.nome, senha_hash=auth.hash_senha(req.senha), papel=papel,
+                             trocar_senha_no_proximo_login=req.trocar_senha_no_proximo_login,
+                             email=req.email, telefone=req.telefone)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="matrícula já cadastrada")
+    audit.registrar_evento(rota="/usuarios", ator_matricula=usuario.matricula,
+                           descricao=f"usuário criado: {novo.matricula}")
+    return _usuario_resp(novo)
+
+
+@app.patch("/usuarios/{usuario_id}",
+          dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
+def atualizar_usuario_rota(usuario_id: int, req: AtualizarUsuarioReq,
+                           usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual), db=Depends(get_db)):
+    from db.models import Papel
+    from db.repo import atualizar_usuario, buscar_usuario_por_id
+    alvo = buscar_usuario_por_id(db, usuario_id)
+    if alvo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
+    if alvo.gestora_id != usuario.gestora_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
+
+    campos: dict = {}
+    if req.nome is not None:
+        campos["nome"] = req.nome
+    if req.papel is not None:
+        try:
+            campos["papel"] = Papel(req.papel)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail=f"papel inválido — use um de {[p.value for p in Papel]}")
+    if req.ativo is not None:
+        # guarda MVP contra self-lockout — não é proteção completa de
+        # "último admin" (isso ficaria pra uma iteração futura), só evita o
+        # caso mais óbvio: alguém se desativando sem querer.
+        if req.ativo is False and alvo.matricula == usuario.matricula:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="não é possível desativar a própria conta")
+        campos["ativo"] = req.ativo
+    if req.senha is not None:
+        from senha_policy import validar_senha
+        violacoes = validar_senha(req.senha)
+        if violacoes:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail=f"senha não atende à política: {', '.join(violacoes)}")
+        campos["senha_hash"] = auth.hash_senha(req.senha)
+    if req.trocar_senha_no_proximo_login is not None:
+        campos["trocar_senha_no_proximo_login"] = req.trocar_senha_no_proximo_login
+    if req.email is not None:
+        campos["email"] = req.email
+    if req.telefone is not None:
+        campos["telefone"] = req.telefone
+
+    atualizado = atualizar_usuario(db, alvo, **campos)
+    db.commit()
+    if req.trocar_senha_no_proximo_login:
+        audit.registrar_evento(rota="/usuarios", ator_matricula=usuario.matricula,
+                               descricao=f"força troca de senha no próximo login: {alvo.matricula}")
+    return _usuario_resp(atualizado)
+
+
+@app.post("/usuarios/{usuario_id}/revogar-sessao",
+          dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
+def revogar_sessao_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                        db=Depends(get_db)):
+    """Derruba a sessão ativa de um usuário na hora, sem esperar o JWT
+    expirar sozinho — útil em desligamento ou suspeita de conta comprometida.
+    Qualquer token emitido ANTES deste momento passa a ser rejeitado por
+    `auth.get_usuario_atual` (compara `iat` do token com este timestamp)."""
+    from datetime import timezone
+
+    from db.repo import buscar_usuario_por_id
+    alvo = buscar_usuario_por_id(db, usuario_id)
+    if alvo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
+    if alvo.gestora_id != usuario.gestora_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
+    alvo.sessao_revogada_em = datetime.now(timezone.utc)
+    db.commit()
+    audit.registrar_evento(rota="/usuarios/revogar-sessao", ator_matricula=usuario.matricula,
+                           descricao=f"sessão revogada: {alvo.matricula}")
+    return {"ok": True}
+
+
+@app.get("/usuarios/{usuario_id}/historico-acessos",
+        dependencies=[Depends(auth.exigir_papel("gestor", "compliance"))])
+def historico_acessos_rota(usuario_id: int, limit: int = 20,
+                           usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                           db=Depends(get_db)):
+    from db.repo import buscar_usuario_por_id
+    alvo = buscar_usuario_por_id(db, usuario_id)
+    if alvo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
+    if alvo.gestora_id != usuario.gestora_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
+    return {"ok": True, "eventos": audit.ler(limit=limit, ator_matricula=alvo.matricula)}

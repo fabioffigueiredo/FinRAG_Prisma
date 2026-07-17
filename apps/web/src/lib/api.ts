@@ -1,5 +1,6 @@
 import type { Backend } from "@/components/app/backend-context";
 import type { Estrategia, PontoSerie } from "@/lib/fund";
+import { getCsrfToken } from "@/lib/csrf";
 
 const BASE = process.env.NEXT_PUBLIC_PRISMA_API ?? "http://localhost:8000";
 
@@ -215,11 +216,304 @@ export type Consulta = {
 
 export async function getAuditoria(): Promise<{ ok: boolean; consultas: Consulta[] }> {
   try {
-    const res = await fetch(`${BASE}/auditoria?limit=50`);
+    const res = await fetch(`${BASE}/auditoria?limit=50`, { credentials: "include" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as { ok: boolean; consultas: Consulta[] };
   } catch {
     return { ok: false, consultas: [] };
+  }
+}
+
+// --- Autenticação -----------------------------------------------------------
+
+export type MeResp = {
+  matricula: string;
+  nome: string;
+  papel: string;
+  gestora_id: number;
+  email: string | null;
+  avatar_url: string | null;
+  totp_ativado: boolean;
+  trocar_senha_no_proximo_login: boolean;
+};
+
+export type LoginResultado =
+  | { ok: true; nome: string; papel: string; gestora_id: number; requer2fa: boolean }
+  | { ok: false; erro: string };
+
+export async function getCsrf(): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE}/auth/csrf`, { credentials: "include" });
+    if (!res.ok) return null;
+    return ((await res.json()) as { csrf_token: string }).csrf_token;
+  } catch {
+    return null;
+  }
+}
+
+export async function login(matricula: string, senha: string): Promise<LoginResultado> {
+  const csrf = getCsrfToken();
+  try {
+    const res = await fetch(`${BASE}/auth/login`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(csrf ? { "X-CSRF-Token": csrf } : {}) },
+      body: JSON.stringify({ matricula, senha }),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, erro: corpo.detail ?? "não foi possível entrar" };
+    }
+    return { ok: true, nome: corpo.nome, papel: corpo.papel, gestora_id: corpo.gestora_id, requer2fa: !!corpo.requer_2fa };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+/** 2ª etapa do login (gestor/compliance com 2FA ativado) — lê o cookie
+ * prisma_pre2fa emitido por login() quando requer2fa vier true. */
+export async function verificar2fa(codigo: string): Promise<LoginResultado> {
+  try {
+    const res = await fetch(`${BASE}/auth/2fa/verificar`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+      body: JSON.stringify({ codigo }),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "código inválido" };
+    return { ok: true, nome: corpo.nome, papel: corpo.papel, gestora_id: corpo.gestora_id, requer2fa: !!corpo.requer_2fa };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+/** Simulação de demo — não é OAuth/OIDC real, sempre loga a mesma conta fixa. */
+export async function loginMicrosoftDemo(): Promise<LoginResultado> {
+  try {
+    const res = await fetch(`${BASE}/auth/login-microsoft-demo`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível entrar" };
+    return { ok: true, nome: corpo.nome, papel: corpo.papel, gestora_id: corpo.gestora_id, requer2fa: !!corpo.requer_2fa };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export type Iniciar2FAResultado =
+  | { ok: true; otpauthUri: string; qrBase64: string }
+  | { ok: false; erro: string };
+
+export async function iniciarEnrollment2FA(): Promise<Iniciar2FAResultado> {
+  try {
+    const res = await fetch(`${BASE}/auth/2fa/iniciar`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível iniciar o 2FA" };
+    return { ok: true, otpauthUri: corpo.otpauth_uri, qrBase64: corpo.qr_base64 };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function confirmarEnrollment2FA(codigo: string): Promise<{ ok: boolean; erro?: string }> {
+  try {
+    const res = await fetch(`${BASE}/auth/2fa/confirmar`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+      body: JSON.stringify({ codigo }),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "código inválido" };
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function trocarSenha(senhaAtual: string, senhaNova: string): Promise<{ ok: boolean; erro?: string }> {
+  try {
+    const res = await fetch(`${BASE}/auth/senha`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+      body: JSON.stringify({ senha_atual: senhaAtual, senha_nova: senhaNova }),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível trocar a senha" };
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function uploadAvatar(arquivo: File): Promise<{ ok: boolean; avatarUrl?: string; erro?: string }> {
+  // Sem Content-Type manual — o browser gera o boundary multipart sozinho.
+  const csrf = getCsrfToken();
+  const formData = new FormData();
+  formData.append("arquivo", arquivo);
+  try {
+    const res = await fetch(`${BASE}/auth/avatar`, {
+      method: "POST",
+      credentials: "include",
+      headers: csrf ? { "X-CSRF-Token": csrf } : undefined,
+      body: formData,
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível enviar a foto" };
+    return { ok: true, avatarUrl: corpo.avatar_url };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function logout(): Promise<void> {
+  const csrf = getCsrfToken();
+  try {
+    await fetch(`${BASE}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: csrf ? { "X-CSRF-Token": csrf } : undefined,
+    });
+  } catch {
+    // best-effort — se a API estiver fora, o cookie httpOnly ainda expira sozinho
+  }
+}
+
+export async function getMe(): Promise<MeResp | null> {
+  try {
+    const res = await fetch(`${BASE}/auth/me`, { credentials: "include" });
+    if (!res.ok) return null;
+    return (await res.json()) as MeResp;
+  } catch {
+    return null;
+  }
+}
+
+// --- Gestão de usuários (admin) ---------------------------------------------
+
+export type Usuario = {
+  id: number;
+  matricula: string;
+  nome: string;
+  papel: "analista" | "gestor" | "compliance";
+  gestora_id: number;
+  gestora_nome: string;
+  ativo: boolean;
+  email: string | null;
+  telefone: string | null;
+  avatar_url: string | null;
+  totp_ativado: boolean;
+  trocar_senha_no_proximo_login: boolean;
+  bloqueado_ate: string | null;
+  tentativas_falhas: number;
+};
+
+export type UsuarioResultado = { ok: true; usuario: Usuario } | { ok: false; erro: string };
+
+function headersComCsrf(): HeadersInit {
+  const csrf = getCsrfToken();
+  return { "Content-Type": "application/json", ...(csrf ? { "X-CSRF-Token": csrf } : {}) };
+}
+
+export async function listarUsuarios(): Promise<{ ok: boolean; usuarios: Usuario[] }> {
+  try {
+    const res = await fetch(`${BASE}/usuarios`, { credentials: "include" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as { ok: boolean; usuarios: Usuario[] };
+  } catch {
+    return { ok: false, usuarios: [] };
+  }
+}
+
+export async function criarUsuario(dados: {
+  matricula: string;
+  nome: string;
+  papel: string;
+  senha: string;
+  email?: string;
+  telefone?: string;
+  trocar_senha_no_proximo_login?: boolean;
+}): Promise<UsuarioResultado> {
+  try {
+    const res = await fetch(`${BASE}/usuarios`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+      body: JSON.stringify(dados),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível criar o usuário" };
+    return { ok: true, usuario: corpo as Usuario };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function atualizarUsuario(
+  id: number,
+  dados: Partial<{
+    nome: string;
+    papel: string;
+    ativo: boolean;
+    senha: string;
+    email: string;
+    telefone: string;
+    trocar_senha_no_proximo_login: boolean;
+  }>,
+): Promise<UsuarioResultado> {
+  try {
+    const res = await fetch(`${BASE}/usuarios/${id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: headersComCsrf(),
+      body: JSON.stringify(dados),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível atualizar o usuário" };
+    return { ok: true, usuario: corpo as Usuario };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function revogarSessao(usuarioId: number): Promise<{ ok: boolean; erro?: string }> {
+  try {
+    const res = await fetch(`${BASE}/usuarios/${usuarioId}/revogar-sessao`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível revogar a sessão" };
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export type EventoAcesso = {
+  timestamp: string;
+  rota: string;
+  pergunta: string;
+  ator_matricula?: string;
+};
+
+export async function getHistoricoAcessos(usuarioId: number): Promise<{ ok: boolean; eventos: EventoAcesso[] }> {
+  try {
+    const res = await fetch(`${BASE}/usuarios/${usuarioId}/historico-acessos`, { credentials: "include" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as { ok: boolean; eventos: EventoAcesso[] };
+  } catch {
+    return { ok: false, eventos: [] };
   }
 }
 

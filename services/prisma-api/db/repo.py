@@ -27,8 +27,10 @@ from .models import (
     EstrategiaVersao,
     Fundo,
     LogAlteracaoEstrategia,
+    Papel,
     Periodo,
     SerieDiaria,
+    Usuario,
     VarClasseDiaria,
 )
 
@@ -287,3 +289,39 @@ def listar_fundos_da_gestora(db: Session, gestora_id: int) -> list[Fundo]:
     usuário autenticado. É essa função (não uma checagem espalhada em cada
     rota) que garante que a Gestora A nunca vê os fundos da Gestora B."""
     return list(db.scalars(select(Fundo).where(Fundo.gestora_id == gestora_id).order_by(Fundo.codigo)))
+
+
+def listar_usuarios_da_gestora(db: Session, gestora_id: int) -> list[Usuario]:
+    """Mesmo princípio de isolamento de `listar_fundos_da_gestora` — a rota
+    nunca filtra por gestora "na mão", sempre passa por aqui."""
+    return list(db.scalars(select(Usuario).where(Usuario.gestora_id == gestora_id).order_by(Usuario.nome)))
+
+
+def buscar_usuario_por_id(db: Session, usuario_id: int) -> Usuario | None:
+    return db.get(Usuario, usuario_id)
+
+
+def criar_usuario(db: Session, *, gestora_id: int, matricula: str, nome: str,
+                  senha_hash: str, papel: Papel,
+                  trocar_senha_no_proximo_login: bool = False,
+                  email: str | None = None, telefone: str | None = None) -> Usuario:
+    """`senha_hash` já vem pronto de `auth.hash_senha` — este módulo não
+    conhece o mecanismo de hashing, só persiste o resultado (mesma separação
+    de responsabilidade do resto do repo: dado aqui, regra de negócio fora)."""
+    usuario = Usuario(matricula=matricula, nome=nome, senha_hash=senha_hash,
+                      papel=papel, gestora_id=gestora_id, ativo=True,
+                      trocar_senha_no_proximo_login=trocar_senha_no_proximo_login,
+                      email=email, telefone=telefone)
+    db.add(usuario)
+    db.flush()
+    return usuario
+
+
+def atualizar_usuario(db: Session, usuario: Usuario, **campos) -> Usuario:
+    """Update parcial — só aplica as chaves passadas. `matricula` e
+    `gestora_id` são imutáveis por design (a rota nem aceita esses campos no
+    payload; ver `app.py::atualizar_usuario_rota`)."""
+    for chave, valor in campos.items():
+        setattr(usuario, chave, valor)
+    db.flush()
+    return usuario

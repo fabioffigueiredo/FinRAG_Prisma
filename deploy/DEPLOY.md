@@ -9,7 +9,11 @@ nem Ollama. Os embeddings caem automaticamente para `sentence-transformers`
 - `wiki.ioi.ia.br` servida pelo container **`ops-wiki-caddy`** (Caddy 2, NÃO
   nginx — `deploy/nginx-prisma.conf` é só referência histórica, desatualizada);
 - Uma chave Groq (grátis em https://console.groq.com/keys), em `.env` na raiz
-  do repo clonado (`GROQ_API_KEY=...`), nunca commitada.
+  do repo clonado (`GROQ_API_KEY=...`), nunca commitada;
+- Um segredo forte pro JWT do login (`PRISMA_JWT_SECRET=...` no mesmo `.env`)
+  — **obrigatório**: com `PRISMA_ENV=production` (já fixo no
+  `deploy/docker-compose.yml`), a API falha no boot se essa variável faltar,
+  de propósito (não sobe com o fallback de dev). Gerar com `openssl rand -hex 32`.
 
 ## Passo a passo
 
@@ -18,6 +22,7 @@ nem Ollama. Os embeddings caem automaticamente para `sentence-transformers`
 git clone https://github.com/fabioffigueiredo/FinRAG_Prisma.git
 cd FinRAG_Prisma
 echo "GROQ_API_KEY=gsk_suachave" > .env
+echo "PRISMA_JWT_SECRET=$(openssl rand -hex 32)" >> .env
 
 # 2. Criar a rede externa (só na 1ª vez) e conectar o Caddy do ops-wiki nela
 docker network create prisma-net
@@ -54,6 +59,15 @@ Pronto: **https://wiki.ioi.ia.br/prisma**
   pluggável) — ver `docs/GOVERNANCA_IA.md`.
 - `GROQ_API_KEY` entra só como variável de ambiente no `docker compose`, nunca no
   repositório. Se a chave faltar/expirar, a demo degrada para o motor Demo sem cair.
+- `PRISMA_JWT_SECRET` (login) — mesma regra: só via `.env`, nunca commitado.
+  Sem ela, com `PRISMA_ENV=production`, o container nem sobe (fail-fast de propósito).
+- CORS não é mais `allow_origins=["*"]` — restrito via `PRISMA_CORS_ORIGINS`
+  (já fixo em `https://wiki.ioi.ia.br` no `deploy/docker-compose.yml`), porque
+  cookie de sessão credenciado exige origem explícita. Se o domínio da demo
+  mudar, atualizar essa variável junto.
+- `PRISMA_ENV=production` (já fixo em `deploy/docker-compose.yml`) também liga
+  o header `Strict-Transport-Security` (HSTS) — mesmo gate que já controla o
+  `secure=` dos cookies de sessão. Ver `docs/SEGURANCA.md`.
 
 ## Atualizar a demo depois de um push
 ```bash
