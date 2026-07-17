@@ -7,7 +7,8 @@ import { motion } from "motion/react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { PrismaWordmark, PrismaMark } from "@/components/brand/logo";
 import { CoreStatus } from "@/components/app/core-status";
-import { NAV } from "@/lib/nav";
+import { navParaPapel } from "@/lib/nav";
+import { useSession } from "@/components/app/session-context";
 import { cn } from "@/lib/utils";
 import { easeOutQuint } from "@/lib/motion";
 
@@ -16,6 +17,8 @@ const STORE_KEY = "prisma:sidebar-collapsed";
 export function Sidebar() {
   const path = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { usuario } = useSession();
+  const nav = navParaPapel(usuario?.papel);
 
   // estado persistido (lido no cliente p/ evitar mismatch de hidratação)
   useEffect(() => {
@@ -61,7 +64,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-6 px-3 py-4">
-        {NAV.map((sec) => (
+        {nav.map((sec) => (
           <div key={sec.grupo}>
             <p
               className={cn(

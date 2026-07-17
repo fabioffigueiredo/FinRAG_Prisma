@@ -8,7 +8,10 @@ services:
       dockerfile: deploy/Dockerfile.api
     container_name: prisma-api
     env_file:
-      - ../.env                          # GROQ_API_KEY — só no servidor, nunca no git
+      - ../.env                          # GROQ_API_KEY, PRISMA_JWT_SECRET — só no servidor, nunca no git
+    environment:
+      PRISMA_ENV: production
+      PRISMA_CORS_ORIGINS: https://wiki.ioi.ia.br
     ports:
       - "127.0.0.1:8000:8000"             # exposto só ao localhost; proxy reverso faz o resto
     networks: [prisma-net]

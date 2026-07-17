@@ -10,6 +10,7 @@ import { popover } from "@/lib/motion";
 import { BACKENDS, useBackend } from "@/components/app/backend-context";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { ThemeToggle } from "@/components/app/theme-toggle";
+import { UserMenu } from "@/components/app/user-menu";
 
 export function Topbar() {
   const { backend, setBackend } = useBackend();
@@ -124,6 +125,7 @@ export function Topbar() {
             );
           })}
         </div>
+        <UserMenu />
       </div>
     </header>
   );

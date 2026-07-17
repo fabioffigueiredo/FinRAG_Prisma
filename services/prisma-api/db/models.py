@@ -91,6 +91,25 @@ class Usuario(Base):
     gestora_id: Mapped[int] = mapped_column(ForeignKey("gestora.id"))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Conta do usuário (hardening estilo instituição financeira, ver docs/SEGURANCA.md)
+    email: Mapped["str | None"] = mapped_column(String(160), nullable=True)
+    telefone: Mapped["str | None"] = mapped_column(String(30), nullable=True)
+    avatar_url: Mapped["str | None"] = mapped_column(String(300), nullable=True)
+
+    # 2FA (TOTP) — segredo em texto plano é uma simplificação de POC
+    # documentada (ver docs/SEGURANCA.md); produção real deveria criptografar
+    # em repouso (ex.: cryptography.fernet + chave de secrets manager).
+    totp_secret: Mapped["str | None"] = mapped_column(String(64), nullable=True)
+    totp_ativado: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
+    # Segurança de senha/sessão
+    trocar_senha_no_proximo_login: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
+    tentativas_falhas: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    bloqueado_ate: Mapped["datetime | None"] = mapped_column(DateTime(timezone=True), nullable=True)
+    sessao_revogada_em: Mapped["datetime | None"] = mapped_column(DateTime(timezone=True), nullable=True)
+
     gestora: Mapped["Gestora"] = relationship(back_populates="usuarios")
 
 
@@ -249,6 +268,10 @@ class AuditoriaEvento(Base):
     bloqueados_json: Mapped[str] = mapped_column(String, default="[]")
     resposta_hash: Mapped[str] = mapped_column(String(16))
     extra_json: Mapped["str | None"] = mapped_column(String, nullable=True)
+    # Ator do evento — necessário pro "histórico de acessos" filtrar por
+    # usuário; None em eventos que não têm um usuário logado associado
+    # (ex.: tentativa de login com matrícula inexistente).
+    ator_matricula: Mapped["str | None"] = mapped_column(String(20), nullable=True, index=True)
 
 
 class BenchmarkPeso(Base):

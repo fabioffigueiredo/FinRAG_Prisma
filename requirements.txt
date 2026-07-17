@@ -14,6 +14,10 @@ alembic==1.14.0                 # Meta 1: migrations versionadas do schema
 psycopg[binary]==3.2.3          # Meta 1: driver Postgres
 pyjwt==2.9.0                     # Meta 4: auth (JWT)
 bcrypt==4.2.1                    # Meta 4: hash de senha
+slowapi==0.1.10                  # Meta 5: rate limiting (lockout/2FA) — backend em memória, trocar por Redis em produção multi-instância
+pyotp==2.10.0                    # Meta 5: 2FA TOTP
+qrcode[pil]==8.0                 # Meta 5: QR code do enrollment de 2FA
+python-multipart==0.0.32         # Meta 5: FastAPI UploadFile (upload de avatar)
 pytest
 
 # Dependências extras APENAS para reexecutar a classificação offline de notícias:
