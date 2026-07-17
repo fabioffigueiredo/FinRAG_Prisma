@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
-import { UserPlus, RefreshCw, Users, ShieldOff } from "lucide-react";
+import { UserPlus, RefreshCw, Users, ShieldOff, ShieldX } from "lucide-react";
 import { toast } from "sonner";
 import {
   listarUsuarios,
   criarUsuario,
   atualizarUsuario,
   revogarSessao,
+  resetar2FA,
   getHistoricoAcessos,
   type Usuario,
   type EventoAcesso,
@@ -156,6 +157,7 @@ function UsuarioDialog({
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [revogando, setRevogando] = useState(false);
+  const [resetando2FA, setResetando2FA] = useState(false);
 
   useEffect(() => {
     if (!aberto) return;
@@ -219,6 +221,19 @@ function UsuarioDialog({
       return;
     }
     toast.success("Sessão revogada — o próximo acesso exige login novamente.");
+  }
+
+  async function onResetar2FA() {
+    if (!editando) return;
+    setResetando2FA(true);
+    const resultado = await resetar2FA(editando.id);
+    setResetando2FA(false);
+    if (!resultado.ok) {
+      toast.error(resultado.erro ?? "não foi possível resetar o 2FA");
+      return;
+    }
+    toast.success("2FA resetado — o usuário vai configurar de novo no próximo login.");
+    onSalvo();
   }
 
   return (
@@ -328,6 +343,23 @@ function UsuarioDialog({
                 >
                   <ShieldOff className="h-3.5 w-3.5" strokeWidth={1.75} />
                   {revogando ? "Revogando…" : "Revogar sessão ativa"}
+                </Button>
+              </div>
+            )}
+            {editando && editando.totp_ativado && (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Pra perda do celular/app autenticador — sem isso, o usuário fica travado na 2ª etapa do login pra sempre.
+                </p>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={resetando2FA || sessao?.matricula === editando.matricula}
+                  onClick={onResetar2FA}
+                >
+                  <ShieldX className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  {resetando2FA ? "Resetando…" : "Resetar 2FA"}
                 </Button>
               </div>
             )}
