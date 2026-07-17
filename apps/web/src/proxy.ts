@@ -29,5 +29,11 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|mp3|ico)$).*)"],
+  // "/" precisa vir explícito: com basePath configurado (deploy hospedado,
+  // ver next.config.ts), o regex compilado do padrão catch-all abaixo exige
+  // uma barra depois do basePath pra casar — a raiz exata (`/prisma`, sem
+  // barra final, que é pra onde o Next.js sempre normaliza `/prisma/`) fica
+  // de fora e o middleware nunca roda nela. Achado em produção: raiz não
+  // autenticada devolvia 200 direto, sem redirecionar pro /login.
+  matcher: ["/", "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|mp3|ico)$).*)"],
 };
