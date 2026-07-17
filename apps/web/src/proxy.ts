@@ -14,13 +14,21 @@ export function proxy(request: NextRequest) {
 
   if (pathname === "/login") {
     if (temSessao) {
-      return NextResponse.redirect(new URL("/", request.url));
+      const raiz = request.nextUrl.clone();
+      raiz.pathname = "/";
+      return NextResponse.redirect(raiz);
     }
     return NextResponse.next();
   }
 
   if (!temSessao) {
-    const destino = new URL("/login", request.url);
+    // request.nextUrl.clone() (não `new URL(path, request.url)`) — só o
+    // clone preserva o basePath internamente; um `new URL("/login", ...)`
+    // substitui o path inteiro a partir da origem e derruba o prefixo
+    // `/prisma` do deploy hospedado (achado em produção: redirect ia pra
+    // wiki.ioi.ia.br/login, sem o /prisma, 404).
+    const destino = request.nextUrl.clone();
+    destino.pathname = "/login";
     destino.searchParams.set("from", pathname);
     return NextResponse.redirect(destino);
   }
