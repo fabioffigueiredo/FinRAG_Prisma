@@ -39,3 +39,6 @@ marketing/video/node_modules/
 apps/web/.next/
 .impeccable/
 marketing/
+
+# graphify — grafo de conhecimento regenerável (grande, refaz com --update)
+graphify-out/

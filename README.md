@@ -1,6 +1,6 @@
 # Prisma — Attribution Intelligence
 
-[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-165%20passing-5eead4)
+[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-194%20passing-5eead4)
 
 **A atribuição de performance, explicada.** O Prisma é uma camada cognitiva que
 transforma o resultado da atribuição de performance de fundos em **narrativa
@@ -26,9 +26,13 @@ comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse v
   ("explica, não recomenda") — postura pensada para ambiente regulado;
 - **Auditoria**: cada consulta registrada (fontes, motor, latência, hash);
 - **Conta e acesso nos padrões de instituição financeira**: login com lockout
-  e rate limiting, 2FA (TOTP) obrigatório para gestor/compliance, sessão
-  revogável a qualquer momento pelo admin, e trilha de auditoria de login/
-  logout/CRUD de usuário — ver [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
+  e rate limiting, 2FA (TOTP) obrigatório para gestor/compliance — com troca
+  de dispositivo self-service via step-up de senha —, sessão revogável a
+  qualquer momento pelo admin, e trilha de auditoria de login/logout/CRUD de
+  usuário — ver [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
+- **Cadastro e ativação de conta**: autocadastro público com aprovação de um
+  gestor, ou convite direto — os dois convergem num link de ativação de uso
+  único (nunca senha por e-mail, padrão OWASP Forgot Password Cheat Sheet).
 
 **Um núcleo, dois adaptadores:** integrado (consome a API da plataforma de
 atribuição do cliente) ou standalone (ingere exports CSV).
@@ -111,8 +115,8 @@ cd apps/web && ./node_modules/.bin/next dev -p 3100   # http://localhost:3100
 > `.venv/bin/python scripts/classificar_noticias.py --llm`
 
 **Testes:** `cd services/prisma-api && ../../.venv/bin/python -m pytest tests/ -v`
-(156 testes, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
-`cd apps/web && ./node_modules/.bin/vitest run` (9 testes) ·
+(188 testes, 183 passam/5 skip, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
+`cd apps/web && ./node_modules/.bin/vitest run` (11 testes) ·
 `cd apps/web && ./node_modules/.bin/tsc --noEmit`
 
 ## Roteiro de demo (~5 min)

@@ -67,6 +67,15 @@ class Papel(str, enum.Enum):
     COMPLIANCE = "compliance"
 
 
+class StatusCadastro(str, enum.Enum):
+    """Estado do ciclo de vida de cadastro — só o autocadastro público nasce
+    `pendente`; usuário criado pelo admin (com ou sem convite) já nasce
+    `aprovado`, nunca passa pela fila de aprovação."""
+    PENDENTE = "pendente"
+    APROVADO = "aprovado"
+    REJEITADO = "rejeitado"
+
+
 class Gestora(Base):
     """O "tenant" da Meta 4 — cada gestora só vê seus próprios fundos.
     Decidi isolar por FK simples (não schema-per-tenant) porque é o
@@ -109,6 +118,18 @@ class Usuario(Base):
     tentativas_falhas: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     bloqueado_ate: Mapped["datetime | None"] = mapped_column(DateTime(timezone=True), nullable=True)
     sessao_revogada_em: Mapped["datetime | None"] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Cadastro/convite — usuários pré-existentes e os criados direto pelo
+    # admin nascem "aprovado" (server_default); só o autocadastro público
+    # nasce "pendente". convite_token é o mesmo link pra ambos os fluxos
+    # (aprovação de autocadastro E convite direto do gestor) — nunca uma
+    # senha por e-mail, ver docs/SEGURANCA.md.
+    status_cadastro: Mapped[str] = mapped_column(
+        Enum(StatusCadastro, name="status_cadastro_enum"),
+        default=StatusCadastro.APROVADO, server_default=text("'APROVADO'"),
+    )
+    convite_token: Mapped["str | None"] = mapped_column(String(64), nullable=True, unique=True)
+    convite_expira_em: Mapped["datetime | None"] = mapped_column(DateTime(timezone=True), nullable=True)
 
     gestora: Mapped["Gestora"] = relationship(back_populates="usuarios")
 

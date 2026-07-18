@@ -25,11 +25,14 @@ services:
       dockerfile: deploy/Dockerfile.api
     container_name: prisma-api
     env_file:
-      - ../.env                          # GROQ_API_KEY, PRISMA_JWT_SECRET, PRISMA_DB_PASSWORD — só no servidor, nunca no git
+      - ../.env                          # GROQ_API_KEY, PRISMA_JWT_SECRET, PRISMA_DB_PASSWORD, SENDGRID_API_KEY, SENDGRID_FROM_EMAIL — só no servidor, nunca no git
     environment:
       PRISMA_ENV: production
       PRISMA_CORS_ORIGINS: https://wiki.ioi.ia.br
       PRISMA_DATABASE_URL: postgresql+psycopg://prisma:${PRISMA_DB_PASSWORD}@prisma-db:5432/prisma
+      # base do link de ativação de conta (/ativar-conta/{token}) — sem isso
+      # cai no default de dev (localhost:3100), quebrando o link no e-mail
+      PRISMA_WEB_URL: https://wiki.ioi.ia.br/prisma
     ports:
       - "127.0.0.1:8000:8000"             # exposto só ao localhost; proxy reverso faz o resto
     networks: [prisma-net]

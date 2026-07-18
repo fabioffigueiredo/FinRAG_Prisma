@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { trocarSenha } from "@/lib/api";
 import { checklistSenha, senhaValida } from "@/lib/senha";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, X } from "lucide-react";
@@ -41,9 +41,8 @@ export function TrocarSenhaForm() {
       <FieldGroup>
         <Field data-invalid={erro ? true : undefined}>
           <FieldLabel htmlFor="senha-atual">Senha atual (temporária)</FieldLabel>
-          <Input
+          <PasswordInput
             id="senha-atual"
-            type="password"
             autoComplete="current-password"
             autoFocus
             value={senhaAtual}
@@ -53,9 +52,8 @@ export function TrocarSenhaForm() {
         </Field>
         <Field>
           <FieldLabel htmlFor="senha-nova">Nova senha</FieldLabel>
-          <Input
+          <PasswordInput
             id="senha-nova"
-            type="password"
             autoComplete="new-password"
             value={senhaNova}
             onChange={(e) => setSenhaNova(e.target.value)}

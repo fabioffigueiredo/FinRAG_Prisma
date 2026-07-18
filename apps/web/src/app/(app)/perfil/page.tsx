@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import { Camera, Check, KeyRound, ShieldCheck, ShieldOff, X } from "lucide-react";
+import { Camera, Check, KeyRound, RefreshCcw, ShieldCheck, ShieldOff, X } from "lucide-react";
 import { toast } from "sonner";
 import { uploadAvatar, trocarSenha } from "@/lib/api";
 import { checklistSenha, senhaValida } from "@/lib/senha";
@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { cn, iniciaisNome } from "@/lib/utils";
 
 const BASE = process.env.NEXT_PUBLIC_PRISMA_API ?? "http://localhost:8000";
@@ -77,11 +77,13 @@ function SecaoAvatar() {
 
 function Secao2FA() {
   const { usuario, refresh } = useSession();
+  const [trocando, setTrocando] = useState(false);
 
   if (!usuario || (usuario.papel !== "gestor" && usuario.papel !== "compliance")) return null;
 
   async function onAtivado() {
-    toast.success("2FA ativado.");
+    toast.success(trocando ? "Dispositivo trocado — 2FA reconfigurado." : "2FA ativado.");
+    setTrocando(false);
     await refresh();
   }
 
@@ -105,14 +107,24 @@ function Secao2FA() {
         )}
       </div>
 
-      {usuario.totp_ativado ? (
-        <p className="text-xs text-muted-foreground">
-          Já configurado nesta conta. Pra trocar de dispositivo, peça a um gestor/compliance pra revogar sua
-          sessão — desativar por conta própria não é permitido, pra não enfraquecer a conta sem o controle do
-          admin.
-        </p>
+      {usuario.totp_ativado && !trocando ? (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Já configurado nesta conta. Trocando de celular? Confirme sua senha atual pra migrar de dispositivo.
+            Perdeu o acesso por completo (sem senha e sem o app antigo)? Peça a um gestor/compliance pra
+            resetar o seu 2FA.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => setTrocando(true)}>
+            <RefreshCcw className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Trocar de dispositivo
+          </Button>
+        </div>
       ) : (
-        <TotpEnrollment onAtivado={onAtivado} />
+        <TotpEnrollment
+          onAtivado={onAtivado}
+          exigirSenhaAtual={usuario.totp_ativado}
+          onCancelar={trocando ? () => setTrocando(false) : undefined}
+        />
       )}
     </Item>
   );
@@ -154,9 +166,8 @@ function SecaoSenha() {
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="senha-atual">Senha atual</FieldLabel>
-            <Input
+            <PasswordInput
               id="senha-atual"
-              type="password"
               value={senhaAtual}
               onChange={(e) => setSenhaAtual(e.target.value)}
               required
@@ -164,9 +175,8 @@ function SecaoSenha() {
           </Field>
           <Field>
             <FieldLabel htmlFor="senha-nova">Nova senha</FieldLabel>
-            <Input
+            <PasswordInput
               id="senha-nova"
-              type="password"
               value={senhaNova}
               onChange={(e) => setSenhaNova(e.target.value)}
               required
