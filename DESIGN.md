@@ -40,7 +40,7 @@ Curvas de desaceleração natural, **nunca bounce/elastic**: `--ease-out-quart`,
 
 `avatar, badge, button, card, dialog, dropdown-menu, input, progress, scroll-area, select, separator, sheet, skeleton, table, tabs, textarea, tooltip` — shadcn `base-nova` (Base UI, prop `render=`, **nunca `asChild`**). `Button` é CVA (`variant`: default/outline/secondary/ghost/destructive/link; `size`: default/xs/sm/lg/icon*) — Stage 4 adiciona `variant="warning"` para o CTA único de login.
 
-**Faltando (Stage 4):** `label`, `checkbox`, `field`/`form` (FieldGroup), `command` (paleta Cmd+K — único primitivo que foge do padrão Base UI, tradicionalmente `cmdk`).
+Também já existentes: `label`, `checkbox`, `field`/`form` (FieldGroup), `command` (paleta Cmd+K via `components/ui/command.tsx` + `components/app/command-palette.tsx` — único primitivo que foge do padrão Base UI, `cmdk`). Nada pendente da lista original do Stage 4.
 
 ## Layout
 

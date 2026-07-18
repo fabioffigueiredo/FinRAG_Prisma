@@ -2,9 +2,11 @@
 
 import { Suspense, useEffect, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { PrismaMark, PrismaWordmark } from "@/components/brand/logo";
 import { Field, FieldGroup, FieldLabel, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { getCsrf, login, loginMicrosoftDemo, verificar2fa } from "@/lib/api";
@@ -182,10 +184,9 @@ function CredenciaisForm({
         </Field>
         <Field data-invalid={erro ? true : undefined}>
           <FieldLabel htmlFor="senha">Senha</FieldLabel>
-          <Input
+          <PasswordInput
             id="senha"
             name="senha"
-            type="password"
             autoComplete="current-password"
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
@@ -213,6 +214,12 @@ function CredenciaisForm({
           <MicrosoftGlyph />
           {enviandoMs ? "Entrando…" : "Entrar com Microsoft"}
         </Button>
+        <p className="text-center text-xs text-muted-foreground">
+          Não tem conta?{" "}
+          <Link href="/cadastro" className="font-medium text-foreground underline underline-offset-2">
+            Cadastre-se
+          </Link>
+        </p>
       </FieldGroup>
     </form>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
-import { UserPlus, RefreshCw, Users, ShieldOff, ShieldX } from "lucide-react";
+import { UserPlus, RefreshCw, Users, ShieldOff, ShieldX, UserCheck, UserX, Mail } from "lucide-react";
 import { toast } from "sonner";
 import {
   listarUsuarios,
@@ -10,8 +10,13 @@ import {
   revogarSessao,
   resetar2FA,
   getHistoricoAcessos,
+  listarPendentes,
+  aprovarCadastro,
+  rejeitarCadastro,
+  criarConvite,
   type Usuario,
   type EventoAcesso,
+  type PendenteCadastro,
 } from "@/lib/api";
 import { useSession } from "@/components/app/session-context";
 import { PageStagger, Item } from "@/components/app/reveal";
@@ -29,8 +34,10 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 type Papel = "analista" | "gestor" | "compliance";
@@ -64,6 +71,22 @@ const PAPEL_ITEMS = (Object.keys(PAPEL_INFO) as Papel[]).map((value) => ({
   label: PAPEL_INFO[value].label,
 }));
 
+/** Toast padrão pra qualquer ação que gera link de ativação (aprovação de
+ * cadastro OU convite direto) — o link SEMPRE aparece aqui, mesmo quando o
+ * e-mail foi enviado: rede de segurança se o e-mail cair no spam/falhar. */
+function avisarLinkAtivacao(linkAtivacao: string, emailEnviado: boolean) {
+  toast.success(emailEnviado ? "E-mail de ativação enviado." : "E-mail não pôde ser enviado — copie o link abaixo.", {
+    description: linkAtivacao,
+    action: {
+      label: "Copiar link",
+      onClick: () => {
+        navigator.clipboard.writeText(linkAtivacao);
+        toast.success("Link copiado.");
+      },
+    },
+  });
+}
+
 function RoleBadge({ papel }: { papel: string }) {
   const info = PAPEL_INFO[papel as Papel];
   if (!info) return <Badge variant="outline">{papel}</Badge>;
@@ -77,6 +100,8 @@ function RoleBadge({ papel }: { papel: string }) {
   );
 }
 
+type ModoCriacao = "senha" | "convite";
+
 type FormState = {
   matricula: string;
   nome: string;
@@ -86,6 +111,7 @@ type FormState = {
   email: string;
   telefone: string;
   trocarSenha: boolean;
+  modo: ModoCriacao;
 };
 const FORM_VAZIO: FormState = {
   matricula: "",
@@ -96,6 +122,7 @@ const FORM_VAZIO: FormState = {
   email: "",
   telefone: "",
   trocarSenha: false,
+  modo: "senha",
 };
 
 function HistoricoAcessos({ usuarioId }: { usuarioId: number }) {
@@ -141,6 +168,110 @@ function HistoricoAcessos({ usuarioId }: { usuarioId: number }) {
   );
 }
 
+function PendentesSection({ onProcessado }: { onProcessado: () => void }) {
+  const [pendentes, setPendentes] = useState<PendenteCadastro[]>([]);
+  const [carregado, setCarregado] = useState(false);
+  const [papeis, setPapeis] = useState<Record<number, Papel>>({});
+  const [processando, setProcessando] = useState<number | null>(null);
+
+  async function carregar() {
+    const r = await listarPendentes();
+    setPendentes(r.usuarios);
+    setCarregado(true);
+  }
+
+  useEffect(() => {
+    let ativo = true;
+    listarPendentes().then((r) => {
+      if (ativo) {
+        setPendentes(r.usuarios);
+        setCarregado(true);
+      }
+    });
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  async function onAprovar(p: PendenteCadastro) {
+    setProcessando(p.id);
+    const resultado = await aprovarCadastro(p.id, papeis[p.id] ?? "analista");
+    setProcessando(null);
+    if (!resultado.ok) {
+      toast.error(resultado.erro);
+      return;
+    }
+    avisarLinkAtivacao(resultado.linkAtivacao, resultado.emailEnviado);
+    carregar();
+    onProcessado();
+  }
+
+  async function onRejeitar(p: PendenteCadastro) {
+    setProcessando(p.id);
+    const resultado = await rejeitarCadastro(p.id);
+    setProcessando(null);
+    if (!resultado.ok) {
+      toast.error(resultado.erro ?? "não foi possível rejeitar o cadastro");
+      return;
+    }
+    toast.success("Cadastro rejeitado.");
+    carregar();
+  }
+
+  if (!carregado || pendentes.length === 0) return null;
+
+  return (
+    <Item className="card-surface space-y-3 p-5">
+      <div>
+        <h2 className="text-sm font-semibold text-foreground">Cadastros pendentes</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">Autocadastro público aguardando sua aprovação.</p>
+      </div>
+      <ul className="space-y-2">
+        {pendentes.map((p) => (
+          <li
+            key={p.id}
+            className="flex flex-col gap-2 border-b border-border/50 pb-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <p className="text-sm text-foreground">{p.nome}</p>
+              <p className="tabular text-xs text-muted-foreground">
+                {p.matricula}
+                {p.email ? ` · ${p.email}` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                items={PAPEL_ITEMS}
+                value={papeis[p.id] ?? "analista"}
+                onValueChange={(v) => setPapeis((s) => ({ ...s, [p.id]: v as Papel }))}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {PAPEL_ITEMS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="warning" disabled={processando === p.id} onClick={() => onAprovar(p)}>
+                <UserCheck className="h-3.5 w-3.5" strokeWidth={1.75} /> Aprovar
+              </Button>
+              <Button size="sm" variant="destructive" disabled={processando === p.id} onClick={() => onRejeitar(p)}>
+                <UserX className="h-3.5 w-3.5" strokeWidth={1.75} /> Rejeitar
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Item>
+  );
+}
+
 function UsuarioDialog({
   aberto,
   onOpenChange,
@@ -173,6 +304,7 @@ function UsuarioDialog({
             email: editando.email ?? "",
             telefone: editando.telefone ?? "",
             trocarSenha: editando.trocar_senha_no_proximo_login,
+            modo: "senha",
           }
         : FORM_VAZIO,
     );
@@ -182,31 +314,62 @@ function UsuarioDialog({
     e.preventDefault();
     setErro(null);
     setEnviando(true);
-    const resultado = editando
-      ? await atualizarUsuario(editando.id, {
-          nome: form.nome,
-          papel: form.papel,
-          ativo: form.ativo,
-          email: form.email || undefined,
-          telefone: form.telefone || undefined,
-          trocar_senha_no_proximo_login: form.trocarSenha,
-          ...(form.senha ? { senha: form.senha } : {}),
-        })
-      : await criarUsuario({
-          matricula: form.matricula,
-          nome: form.nome,
-          papel: form.papel,
-          senha: form.senha,
-          email: form.email || undefined,
-          telefone: form.telefone || undefined,
-          trocar_senha_no_proximo_login: form.trocarSenha,
-        });
+
+    if (editando) {
+      const resultado = await atualizarUsuario(editando.id, {
+        nome: form.nome,
+        papel: form.papel,
+        ativo: form.ativo,
+        email: form.email || undefined,
+        telefone: form.telefone || undefined,
+        trocar_senha_no_proximo_login: form.trocarSenha,
+        ...(form.senha ? { senha: form.senha } : {}),
+      });
+      setEnviando(false);
+      if (!resultado.ok) {
+        setErro(resultado.erro);
+        return;
+      }
+      toast.success("Usuário atualizado.");
+      onOpenChange(false);
+      onSalvo();
+      return;
+    }
+
+    if (form.modo === "convite") {
+      const resultado = await criarConvite({
+        matricula: form.matricula,
+        nome: form.nome,
+        papel: form.papel,
+        email: form.email,
+        telefone: form.telefone || undefined,
+      });
+      setEnviando(false);
+      if (!resultado.ok) {
+        setErro(resultado.erro);
+        return;
+      }
+      avisarLinkAtivacao(resultado.linkAtivacao, resultado.emailEnviado);
+      onOpenChange(false);
+      onSalvo();
+      return;
+    }
+
+    const resultado = await criarUsuario({
+      matricula: form.matricula,
+      nome: form.nome,
+      papel: form.papel,
+      senha: form.senha,
+      email: form.email || undefined,
+      telefone: form.telefone || undefined,
+      trocar_senha_no_proximo_login: form.trocarSenha,
+    });
     setEnviando(false);
     if (!resultado.ok) {
       setErro(resultado.erro);
       return;
     }
-    toast.success(editando ? "Usuário atualizado." : "Usuário criado.");
+    toast.success("Usuário criado.");
     onOpenChange(false);
     onSalvo();
   }
@@ -248,6 +411,24 @@ function UsuarioDialog({
         <form onSubmit={onSubmit}>
           <FieldGroup>
             {erro && <p className="text-sm text-destructive">{erro}</p>}
+            {!editando && (
+              <Tabs value={form.modo} onValueChange={(v) => setForm((f) => ({ ...f, modo: v as ModoCriacao }))}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="senha" className="flex-1">
+                    Definir senha agora
+                  </TabsTrigger>
+                  <TabsTrigger value="convite" className="flex-1">
+                    Enviar link de cadastro
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+            {!editando && form.modo === "convite" && (
+              <p className="text-xs text-muted-foreground">
+                <Mail className="mr-1 inline h-3 w-3" strokeWidth={1.75} />
+                O usuário recebe um link de uso único pra definir a própria senha e configurar o 2FA.
+              </p>
+            )}
             <Field>
               <FieldLabel htmlFor="matricula">Matrícula</FieldLabel>
               <Input
@@ -263,12 +444,13 @@ function UsuarioDialog({
               <Input id="nome" value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} required />
             </Field>
             <Field>
-              <FieldLabel htmlFor="email">E-mail</FieldLabel>
+              <FieldLabel htmlFor="email">E-mail{!editando && form.modo === "convite" ? "" : " (opcional)"}</FieldLabel>
               <Input
                 id="email"
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                required={!editando && form.modo === "convite"}
               />
             </Field>
             <Field>
@@ -296,16 +478,17 @@ function UsuarioDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="senha">{editando ? "Nova senha (opcional)" : "Senha"}</FieldLabel>
-              <Input
-                id="senha"
-                type="password"
-                value={form.senha}
-                onChange={(e) => setForm((f) => ({ ...f, senha: e.target.value }))}
-                required={!editando}
-              />
-            </Field>
+            {(editando || form.modo === "senha") && (
+              <Field>
+                <FieldLabel htmlFor="senha">{editando ? "Nova senha (opcional)" : "Senha"}</FieldLabel>
+                <PasswordInput
+                  id="senha"
+                  value={form.senha}
+                  onChange={(e) => setForm((f) => ({ ...f, senha: e.target.value }))}
+                  required={!editando}
+                />
+              </Field>
+            )}
             {editando && (
               <Field orientation="horizontal">
                 <Checkbox
@@ -318,16 +501,18 @@ function UsuarioDialog({
                 </FieldLabel>
               </Field>
             )}
-            <Field orientation="horizontal">
-              <Checkbox
-                id="trocar-senha"
-                checked={form.trocarSenha}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, trocarSenha: v === true }))}
-              />
-              <FieldLabel htmlFor="trocar-senha" className="font-normal">
-                Forçar troca de senha no próximo login
-              </FieldLabel>
-            </Field>
+            {(editando || form.modo === "senha") && (
+              <Field orientation="horizontal">
+                <Checkbox
+                  id="trocar-senha"
+                  checked={form.trocarSenha}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, trocarSenha: v === true }))}
+                />
+                <FieldLabel htmlFor="trocar-senha" className="font-normal">
+                  Forçar troca de senha no próximo login
+                </FieldLabel>
+              </Field>
+            )}
 
             {editando && (
               <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
@@ -367,7 +552,11 @@ function UsuarioDialog({
 
             <DialogFooter>
               <Button type="submit" variant="warning" disabled={enviando}>
-                {enviando ? "Salvando…" : "Salvar"}
+                {enviando
+                  ? "Salvando…"
+                  : !editando && form.modo === "convite"
+                    ? "Enviar convite"
+                    : "Salvar"}
               </Button>
             </DialogFooter>
           </FieldGroup>
@@ -422,6 +611,8 @@ export default function UsuariosPage() {
           </Button>
         </div>
       </Item>
+
+      <PendentesSection onProcessado={carregar} />
 
       {!carregou ? (
         <Item className="overflow-hidden card-surface">

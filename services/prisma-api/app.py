@@ -371,12 +371,23 @@ class Iniciar2FAResp(BaseModel):
     qr_base64: str
 
 
+class Iniciar2FAReq(BaseModel):
+    senha_atual: "str | None" = None
+
+
 @app.post("/auth/2fa/iniciar", response_model=Iniciar2FAResp, dependencies=[Depends(auth.verificar_csrf)])
-def iniciar_2fa(usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance")),
+def iniciar_2fa(req: Iniciar2FAReq = Iniciar2FAReq(),
+                usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance")),
                 db=Depends(get_db)):
     """Gera o segredo e devolve o QR — NÃO ativa ainda. Só
     /auth/2fa/confirmar ativa, depois de provar que o usuário configurou
-    certo num app autenticador de verdade."""
+    certo num app autenticador de verdade.
+
+    Step-up: se já existe um 2FA ativo (troca de dispositivo self-service),
+    exige a senha atual antes de sobrescrever o segredo — sem isso, um
+    cookie de sessão roubado sozinho bastaria pra sequestrar o 2FA (ver
+    docs/SEGURANCA.md). Primeiro enrollment (totp_ativado=False) não exige
+    nada além do papel."""
     import base64
     import io
 
@@ -385,8 +396,12 @@ def iniciar_2fa(usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor",
 
     from db.models import Usuario as _Usuario
 
-    segredo = pyotp.random_base32()
     alvo = db.get(_Usuario, usuario.id)
+    if alvo.totp_ativado:
+        if not req.senha_atual or not auth.verificar_senha(req.senha_atual, alvo.senha_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="senha atual incorreta")
+
+    segredo = pyotp.random_base32()
     alvo.totp_secret = segredo
     alvo.totp_ativado = False
     db.commit()
@@ -502,6 +517,149 @@ def _login_microsoft_demo_com_rate_limit(request: Request, response: Response, d
                            descricao="login via Microsoft (simulação de demo)")
     return LoginResp(token=auth.criar_token(usuario), nome=usuario.nome,
                      papel=usuario.papel.value, gestora_id=usuario.gestora_id)
+
+
+# --- Cadastro / convite / ativação de conta ---------------------------------
+#
+# Nunca envia senha por e-mail (temporária ou não) — padrão de mercado (OWASP
+# Forgot-Password Cheat Sheet): um token de uso único, expiração curta,
+# embutido num link; o usuário define a própria senha ao abrir o link. Dois
+# fluxos convergem no mesmo `convite_token`/`ativar-conta`:
+#   1. autocadastro público (`/auth/cadastro`) + aprovação de um gestor;
+#   2. convite direto do gestor (`/usuarios/convite`), sem etapa de aprovação.
+
+PRISMA_WEB_URL = os.environ.get("PRISMA_WEB_URL", "http://localhost:3100")
+
+
+def _link_ativacao(token: str) -> str:
+    return f"{PRISMA_WEB_URL}/ativar-conta/{token}"
+
+
+class CadastroReq(BaseModel):
+    matricula: str
+    nome: str
+    email: str
+    telefone: "str | None" = None
+
+
+@app.post("/auth/cadastro", status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth.verificar_csrf)])
+def solicitar_cadastro(request: Request, req: CadastroReq, db=Depends(get_db)):
+    """Fininho, mesmo motivo das outras rotas com rate limit (ver skill
+    fastapi-slowapi-future-annotations)."""
+    return _solicitar_cadastro_com_rate_limit(request, req, db)
+
+
+@limiter.limit("5/minute")
+def _solicitar_cadastro_com_rate_limit(request: Request, req: CadastroReq, db):
+    """Rota pública — sempre cria `papel=analista` (decisão de produto: o
+    formulário nem pergunta o papel; um gestor eleva na aprovação se quiser).
+    `ativo=False` até aprovação — mesmo em teoria não daria pra logar sem
+    senha utilizável, mas fica explícito."""
+    import secrets as _secrets
+    from sqlalchemy import select as _select
+    from sqlalchemy.exc import IntegrityError
+
+    from db.models import Gestora as _Gestora
+    from db.models import Papel as _Papel
+    from db.models import StatusCadastro as _StatusCadastro
+    from db.models import Usuario as _Usuario
+
+    gestora = db.scalar(_select(_Gestora).order_by(_Gestora.id).limit(1))
+    if gestora is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="nenhuma gestora cadastrada — não é possível processar o cadastro")
+
+    senha_inutilizavel = auth.hash_senha(_secrets.token_urlsafe(32))
+    novo = _Usuario(matricula=req.matricula, nome=req.nome, senha_hash=senha_inutilizavel,
+                    papel=_Papel.ANALISTA, gestora_id=gestora.id, ativo=False,
+                    email=req.email, telefone=req.telefone, status_cadastro=_StatusCadastro.PENDENTE)
+    db.add(novo)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="matrícula já cadastrada")
+
+    audit.registrar_evento(rota="/auth/cadastro", ator_matricula=req.matricula,
+                           descricao="autocadastro solicitado — aguardando aprovação")
+    return {"ok": True}
+
+
+class ConviteValidoResp(BaseModel):
+    nome: str
+    matricula: str
+
+
+@app.get("/auth/convite/{token}", response_model=ConviteValidoResp)
+def validar_convite_rota(token: str, db=Depends(get_db)):
+    """Pública de propósito (o usuário ainda não tem sessão) — só devolve o
+    mínimo pra saudação da tela (nome/matrícula), nunca papel/e-mail/etc."""
+    from datetime import timezone as _timezone
+    from sqlalchemy import select as _select
+
+    from db.models import Usuario as _Usuario
+
+    alvo = db.scalar(_select(_Usuario).where(_Usuario.convite_token == token))
+    if alvo is None or alvo.convite_expira_em is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="link inválido ou já utilizado")
+    expira_em = alvo.convite_expira_em
+    if expira_em.tzinfo is None:
+        expira_em = expira_em.replace(tzinfo=_timezone.utc)
+    if expira_em < datetime.now(_timezone.utc):
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="link expirado — peça um novo convite")
+    return ConviteValidoResp(nome=alvo.nome, matricula=alvo.matricula)
+
+
+class AtivarContaReq(BaseModel):
+    token: str
+    nova_senha: str
+
+
+@app.post("/auth/ativar-conta", response_model=LoginResp, dependencies=[Depends(auth.verificar_csrf)])
+def ativar_conta_rota(request: Request, req: AtivarContaReq, response: Response, db=Depends(get_db)):
+    """Fininho, mesmo motivo das outras rotas com rate limit (ver skill
+    fastapi-slowapi-future-annotations)."""
+    return _ativar_conta_com_rate_limit(request, req, response, db)
+
+
+@limiter.limit("5/minute")
+def _ativar_conta_com_rate_limit(request: Request, req: AtivarContaReq, response: Response, db) -> LoginResp:
+    """Valida o token (existe, não expirado — token é sempre de uso único:
+    consumido/limpo aqui mesmo em caso de novo pedido de troca de senha
+    futuro), seta a senha escolhida pelo usuário e já emite sessão — cai
+    direto no mesmo fluxo pós-login normal (inclusive `/ativar-2fa` se o
+    papel exigir)."""
+    from datetime import timezone as _timezone
+    from sqlalchemy import select as _select
+
+    from db.models import Usuario as _Usuario
+    from senha_policy import validar_senha
+
+    alvo = db.scalar(_select(_Usuario).where(_Usuario.convite_token == req.token))
+    if alvo is None or alvo.convite_expira_em is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="link inválido ou já utilizado")
+    expira_em = alvo.convite_expira_em
+    if expira_em.tzinfo is None:
+        expira_em = expira_em.replace(tzinfo=_timezone.utc)
+    if expira_em < datetime.now(_timezone.utc):
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="link expirado — peça um novo convite")
+
+    violacoes = validar_senha(req.nova_senha)
+    if violacoes:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"senha não atende à política: {', '.join(violacoes)}")
+
+    alvo.senha_hash = auth.hash_senha(req.nova_senha)
+    alvo.trocar_senha_no_proximo_login = False
+    alvo.ativo = True
+    alvo.convite_token = None
+    alvo.convite_expira_em = None
+    db.commit()
+
+    auth.emitir_cookies_sessao(response, alvo)
+    audit.registrar_evento(rota="/auth/ativar-conta", ator_matricula=alvo.matricula, descricao="conta ativada")
+    return LoginResp(token=auth.criar_token(alvo), nome=alvo.nome, papel=alvo.papel.value,
+                     gestora_id=alvo.gestora_id)
 
 
 def _parse_csv_contribuicoes(texto: str) -> list[dict]:
@@ -879,6 +1037,163 @@ def criar_usuario_rota(req: CriarUsuarioReq, usuario: auth.UsuarioAtual = Depend
     audit.registrar_evento(rota="/usuarios", ator_matricula=usuario.matricula,
                            descricao=f"usuário criado: {novo.matricula}")
     return _usuario_resp(novo)
+
+
+class PendenteResp(BaseModel):
+    id: int
+    matricula: str
+    nome: str
+    email: "str | None" = None
+    telefone: "str | None" = None
+
+
+@app.get("/usuarios/pendentes", dependencies=[Depends(auth.exigir_papel("gestor", "compliance"))])
+def listar_pendentes_rota(usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual), db=Depends(get_db)):
+    from sqlalchemy import select as _select
+
+    from db.models import StatusCadastro as _StatusCadastro
+    from db.models import Usuario as _Usuario
+    pendentes = db.scalars(
+        _select(_Usuario).where(_Usuario.gestora_id == usuario.gestora_id,
+                                _Usuario.status_cadastro == _StatusCadastro.PENDENTE)
+        .order_by(_Usuario.nome)
+    )
+    return {"ok": True, "usuarios": [
+        PendenteResp(id=p.id, matricula=p.matricula, nome=p.nome, email=p.email, telefone=p.telefone)
+        for p in pendentes
+    ]}
+
+
+class AprovarReq(BaseModel):
+    papel: "str | None" = None
+
+
+class AprovarResp(BaseModel):
+    ok: bool = True
+    link_ativacao: str
+    email_enviado: bool
+
+
+@app.post("/usuarios/{usuario_id}/aprovar", response_model=AprovarResp,
+          dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
+def aprovar_cadastro_rota(usuario_id: int, req: AprovarReq = AprovarReq(),
+                          usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual), db=Depends(get_db)):
+    """Gera o token de ativação + dispara o e-mail — SEMPRE devolve o link
+    também na resposta (rede de segurança se o e-mail falhar/não estiver
+    configurado; não é o caminho principal)."""
+    from datetime import timedelta, timezone as _timezone
+
+    import convite as _convite
+
+    from db.models import Papel as _Papel
+    from db.models import StatusCadastro as _StatusCadastro
+    from db.repo import buscar_usuario_por_id
+
+    alvo = buscar_usuario_por_id(db, usuario_id)
+    if alvo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
+    if alvo.gestora_id != usuario.gestora_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
+    if alvo.status_cadastro != _StatusCadastro.PENDENTE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cadastro não está pendente")
+
+    if req.papel is not None:
+        try:
+            alvo.papel = _Papel(req.papel)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail=f"papel inválido — use um de {[p.value for p in _Papel]}")
+
+    token = _convite.gerar_token()
+    alvo.convite_token = token
+    alvo.convite_expira_em = datetime.now(_timezone.utc) + timedelta(hours=_convite.TOKEN_EXPIRA_HORAS)
+    alvo.status_cadastro = _StatusCadastro.APROVADO
+    alvo.ativo = True
+    db.commit()
+
+    link = _link_ativacao(token)
+    email_enviado = _convite.enviar_email_ativacao(alvo.email, alvo.nome, link) if alvo.email else False
+
+    audit.registrar_evento(rota="/usuarios/aprovar", ator_matricula=usuario.matricula,
+                           descricao=f"cadastro aprovado: {alvo.matricula}")
+    return AprovarResp(link_ativacao=link, email_enviado=email_enviado)
+
+
+@app.post("/usuarios/{usuario_id}/rejeitar",
+          dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
+def rejeitar_cadastro_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                           db=Depends(get_db)):
+    from db.models import StatusCadastro as _StatusCadastro
+    from db.repo import buscar_usuario_por_id
+
+    alvo = buscar_usuario_por_id(db, usuario_id)
+    if alvo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
+    if alvo.gestora_id != usuario.gestora_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
+    if alvo.status_cadastro != _StatusCadastro.PENDENTE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cadastro não está pendente")
+
+    alvo.status_cadastro = _StatusCadastro.REJEITADO
+    alvo.ativo = False
+    db.commit()
+    audit.registrar_evento(rota="/usuarios/rejeitar", ator_matricula=usuario.matricula,
+                           descricao=f"cadastro rejeitado: {alvo.matricula}")
+    return {"ok": True}
+
+
+class CriarConviteReq(BaseModel):
+    matricula: str
+    nome: str
+    papel: str
+    email: str
+    telefone: "str | None" = None
+
+
+@app.post("/usuarios/convite", status_code=status.HTTP_201_CREATED, response_model=AprovarResp,
+          dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
+def criar_convite_rota(req: CriarConviteReq, usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                       db=Depends(get_db)):
+    """Variante de `criar_usuario_rota` sem campo de senha — o gestor já
+    decidiu (sem etapa de aprovação), então nasce direto `aprovado`+`ativo`,
+    só sem senha utilizável até o usuário abrir o link."""
+    from datetime import timedelta, timezone as _timezone
+
+    import convite as _convite
+    from sqlalchemy.exc import IntegrityError
+
+    from db.models import Papel as _Papel
+    from db.models import StatusCadastro as _StatusCadastro
+    from db.models import Usuario as _Usuario
+    import secrets as _secrets
+
+    try:
+        papel = _Papel(req.papel)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"papel inválido — use um de {[p.value for p in _Papel]}")
+
+    token = _convite.gerar_token()
+    senha_inutilizavel = auth.hash_senha(_secrets.token_urlsafe(32))
+    novo = _Usuario(matricula=req.matricula, nome=req.nome, senha_hash=senha_inutilizavel,
+                    papel=papel, gestora_id=usuario.gestora_id, ativo=True,
+                    email=req.email, telefone=req.telefone,
+                    status_cadastro=_StatusCadastro.APROVADO,
+                    convite_token=token,
+                    convite_expira_em=datetime.now(_timezone.utc) + timedelta(hours=_convite.TOKEN_EXPIRA_HORAS))
+    db.add(novo)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="matrícula já cadastrada")
+
+    link = _link_ativacao(token)
+    email_enviado = _convite.enviar_email_ativacao(novo.email, novo.nome, link) if novo.email else False
+
+    audit.registrar_evento(rota="/usuarios/convite", ator_matricula=usuario.matricula,
+                           descricao=f"convite enviado: {novo.matricula}")
+    return AprovarResp(link_ativacao=link, email_enviado=email_enviado)
 
 
 @app.patch("/usuarios/{usuario_id}",

@@ -50,6 +50,35 @@ aspiracional — incluindo as limitações conhecidas do POC.
 - CSRF (double-submit cookie) protege toda rota de mutação, incluindo login
   — o próprio `/auth/csrf` é chamado ao montar a página, antes de existir
   sessão, fechando o vetor de login CSRF.
+- **Troca de dispositivo de 2FA self-service** (`POST /auth/2fa/iniciar` com
+  `totp_ativado=True`) exige **step-up**: a senha atual precisa ser
+  confirmada de novo antes do segredo TOTP ser sobrescrito — um cookie de
+  sessão roubado sozinho não basta pra sequestrar o 2FA. Primeiro enrollment
+  não exige nada além do papel (não há segredo anterior pra proteger).
+
+### Cadastro, convite e ativação de conta
+
+Dois fluxos convergem no mesmo mecanismo de token de ativação:
+
+1. **Autocadastro** (`POST /auth/cadastro`, público, rate-limited) — cria um
+   usuário `papel=analista`, `status_cadastro=pendente`, `ativo=False`. Um
+   gestor/compliance aprova (`POST /usuarios/{id}/aprovar`, pode ajustar o
+   papel) ou rejeita (`POST /usuarios/{id}/rejeitar`).
+2. **Convite direto do gestor** (`POST /usuarios/convite`) — cria o usuário
+   já aprovado/ativo, sem etapa de aprovação; o gestor já decidiu o papel na
+   hora.
+
+Ambos terminam no mesmo lugar: um **token de ativação de uso único**
+(`secrets.token_urlsafe(32)`, mesma primitiva do CSRF), expiração de 48h
+(`convite.TOKEN_EXPIRA_HORAS`), embutido num link (`/ativar-conta/{token}`).
+`POST /auth/ativar-conta` valida o token, deixa o usuário escolher a própria
+senha e já emite sessão — **nunca** uma senha (temporária ou não) trafega
+por e-mail, seguindo o
+[OWASP Forgot Password Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
+Envio de e-mail via API REST do SendGrid (`convite.py::enviar_email_ativacao`)
+— nunca lança: se falhar (ou as env vars não estiverem configuradas), a rota
+de aprovação/convite **sempre devolve o link também na resposta**, rede de
+segurança que o gestor pode copiar manualmente.
 
 ### V3 — Gestão de sessão
 
@@ -110,15 +139,23 @@ Documentadas de propósito, não escondidas:
   conta), herdada de uma sessão anterior. Não impede, por exemplo, que o
   último gestor ativo de uma gestora seja desativado por outro gestor.
 - **Login "Entrar com Microsoft" é simulação** — ver seção 2, V2.
+- **`SENDGRID_API_KEY`/`SENDGRID_FROM_EMAIL` não configurados** faz
+  `enviar_email_ativacao` sempre devolver `False` sem lançar — degrada pro
+  link-na-resposta (ver seção "Cadastro, convite e ativação de conta").
+  Nunca commitado; tratamento igual ao de `PRISMA_JWT_SECRET`/`GROQ_API_KEY`
+  no `.env` da VPS.
 
 ## 4. Onde cada controle vive no código
 
 | Controle | Arquivo |
 |---|---|
 | Hash/política de senha, lockout, 2FA, revogação | `services/prisma-api/auth.py` |
-| Rotas de auth/2FA/admin | `services/prisma-api/app.py` |
+| Rotas de auth/2FA/admin/cadastro | `services/prisma-api/app.py` |
+| Token de ativação + envio de e-mail (SendGrid) | `services/prisma-api/convite.py` |
 | Política de senha (regras) | `services/prisma-api/senha_policy.py` |
 | Headers de segurança | `services/prisma-api/security_headers.py` |
 | Auditoria | `services/prisma-api/audit.py` |
 | Gate de telas obrigatórias | `apps/web/src/app/(app)/layout.tsx` |
 | Menu do usuário / logout | `apps/web/src/components/app/user-menu.tsx` |
+| Autocadastro público | `apps/web/src/app/cadastro/` |
+| Ativação de conta via link | `apps/web/src/app/ativar-conta/[token]/` |

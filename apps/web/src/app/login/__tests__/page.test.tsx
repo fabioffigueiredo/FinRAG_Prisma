@@ -40,7 +40,7 @@ describe("LoginPage", () => {
   it("habilita o botão quando matrícula e senha estão preenchidas", () => {
     render(<LoginPage />);
     fireEvent.change(screen.getByLabelText(/matrícula/i), { target: { value: "DEMO-001" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "demo12345" } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "demo12345" } });
     expect(screen.getByRole("button", { name: "Entrar" })).toBeEnabled();
   });
 
@@ -53,7 +53,7 @@ describe("LoginPage", () => {
     login.mockResolvedValue({ ok: false, erro: "matrícula ou senha inválidas" });
     render(<LoginPage />);
     fireEvent.change(screen.getByLabelText(/matrícula/i), { target: { value: "DEMO-001" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "errada" } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "errada" } });
     fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
 
     expect(await screen.findByText("matrícula ou senha inválidas")).toBeInTheDocument();
@@ -64,7 +64,7 @@ describe("LoginPage", () => {
     login.mockResolvedValue({ ok: true, nome: "Ana Demo", papel: "gestor", gestora_id: 1 });
     render(<LoginPage />);
     fireEvent.change(screen.getByLabelText(/matrícula/i), { target: { value: "DEMO-001" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "demo12345" } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "demo12345" } });
     fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));

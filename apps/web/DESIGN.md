@@ -1,30 +1,41 @@
 # Design
 
-Sistema visual do Prisma — identidade **"Obsidian Terminal"**. Captura o estado atual (fonte da verdade em `src/app/globals.css`) e a linguagem de movimento introduzida no redesign. Dark-first, produto.
+Sistema visual do Prisma. Captura o estado atual (fonte da verdade em `src/app/globals.css`) e a linguagem de movimento introduzida no redesign.
+
+> **Nota de proveniência (2026-07-18):** este arquivo descrevia originalmente a identidade "Obsidian Terminal" (ink+ouro, dark forçado) — a paleta do POC inicial (commit `a071377`, 2026-07-02). O commit `d73f206` ("Redesign institucional", 2026-07-08) substituiu essa paleta pela institucional navy/teal abaixo, e passou a honrar `next-themes` de verdade (claro/escuro alternável, não mais dark forçado). As seções **Theme** e **Color** foram corrigidas nesta data para refletir o CSS real; o resto do arquivo (Typography/Motion/Components/Layout) já estava atualizado.
 
 ## Theme
 
-- **Mood:** terminal financeiro profissional. Ink quase-preto com profundidade por glows radiais ambientes; ouro como marca; mint/coral como semântica financeira (positivo/negativo). Sóbrio, denso onde precisa, calmo.
-- **Estratégia de cor:** Restrained + acento único (ouro) para ações primárias, seleção e indicadores de estado. Cor de estado nunca decorativa.
-- **Modo:** dark forçado (`<html class="dark">`); `next-themes` presente mas não usado para alternância.
+- **Mood:** produto institucional para instituição financeira regulada. Claro como padrão (fundo neutro, navy como marca); escuro com teal como acento vivo. Âmbar constante como único acento "vivo" (CTA primário/estado) nos dois temas — nunca decorativo.
+- **Estratégia de cor:** Restrained — um acento por tema (navy claro / teal escuro), usado só em ação primária, seleção ativa e indicadores de estado.
+- **Modo:** claro/escuro alternável de verdade via `next-themes` (`ThemeProvider` em `app/layout.tsx`, toggle em `components/app/theme-toggle.tsx`) — `defaultTheme="light"`, `enableSystem`.
 
 ## Color (tokens — `globals.css`)
 
+Tokens semânticos via CSS custom properties (`@theme inline`, Tailwind v4), nunca hex cru em componente.
+
+**Claro (institucional, padrão):**
 | Papel | Token | Valor |
 |---|---|---|
-| Fundo | `--background` | `#070a11` |
-| Superfície | `--card` | `#0e1320` |
-| Popover | `--popover` | `#121826` |
-| Sidebar | `--sidebar` | `#0a0e17` |
-| Texto | `--foreground` | `#f3eee3` |
-| Muted | `--muted-foreground` | `#9aa1b0` |
-| **Marca (ouro)** | `--primary` | `#f0b952` |
-| Positivo (menta) | `--success` | `#5eead4` |
-| Negativo (coral) | `--destructive` | `#fb7185` |
-| Charts | `--chart-1..5` | ouro / azul `#5b8def` / menta / violeta `#c4a6ff` / âmbar `#f4c26b` |
-| Borda | `--border` | `rgba(232,224,208,0.1)` |
+| Fundo | `--background` | `#f4f5f7` |
+| Superfície | `--card` | `#ffffff` |
+| Texto | `--foreground` | `#1a1c1c` |
+| **Marca (navy)** | `--primary` | `#003366` |
+| Acento vivo (âmbar) | `--warning` / `--ring` | `#fdb913` |
+| Positivo | `--success` | `#0a7f52` |
+| Negativo | `--destructive` | `#ba1a1a` |
+| Borda | `--border` | `#e2e5ea` |
+| Accent (tint neutro) | `--accent` | `#eaf0f7` — **não confundir com o âmbar** |
 
-**Luz ambiente (fundo):** uma **única fonte de luz coerente** de ouro no canto superior direito, com falloff grande e suave, aprofundando no ink em direção ao canto inferior esquerdo (`radial-gradient`s empilhados + `background-attachment: fixed`). Direcional e intencional (ref. antigravity) — nunca pontos radiais dispersos. A luz é o motivo pelo qual os acentos de ouro (hairline/borda `border-primary/25`) parecem parte do sistema, não aleatórios.
+**Escuro (teal como acento vivo):**
+| Papel | Token | Valor |
+|---|---|---|
+| Fundo | `--background` | `#0a1120` |
+| Superfície | `--card` | `#101a2e` |
+| Texto | `--foreground` | `#e7eefb` |
+| **Marca (teal)** | `--primary` | `#2dd4bf` |
+| Acento vivo (âmbar) | `--warning` / `--ring` | `#fdb913` (constante nos dois temas) |
+| Borda | `--border` | `rgba(159,183,222,0.14)` — hairline translúcida, não sólida |
 
 ## Typography
 

@@ -14,6 +14,11 @@ nem Ollama. Os embeddings caem automaticamente para `sentence-transformers`
   — **obrigatório**: com `PRISMA_ENV=production` (já fixo no
   `deploy/docker-compose.yml`), a API falha no boot se essa variável faltar,
   de propósito (não sobe com o fallback de dev). Gerar com `openssl rand -hex 32`.
+- (Opcional, mas recomendado) uma conta [SendGrid](https://sendgrid.com) com
+  um remetente verificado (Single Sender é o caminho mais simples) — sem
+  `SENDGRID_API_KEY`/`SENDGRID_FROM_EMAIL` no `.env`, o cadastro/convite de
+  usuário continua funcionando normalmente, só que sem enviar e-mail: o
+  gestor recebe o link de ativação na tela e precisa copiar/repassar na mão.
 
 ## Passo a passo
 
@@ -23,6 +28,9 @@ git clone https://github.com/fabioffigueiredo/FinRAG_Prisma.git
 cd FinRAG_Prisma
 echo "GROQ_API_KEY=gsk_suachave" > .env
 echo "PRISMA_JWT_SECRET=$(openssl rand -hex 32)" >> .env
+# opcional — sem isso, cadastro/convite ainda funciona, só sem enviar e-mail (ver acima)
+echo "SENDGRID_API_KEY=SG.suachave" >> .env
+echo "SENDGRID_FROM_EMAIL=prisma@seudominio.com" >> .env
 
 # 2. Criar a rede externa (só na 1ª vez) e conectar o Caddy do ops-wiki nela
 docker network create prisma-net
@@ -68,6 +76,15 @@ Pronto: **https://wiki.ioi.ia.br/prisma**
 - `PRISMA_ENV=production` (já fixo em `deploy/docker-compose.yml`) também liga
   o header `Strict-Transport-Security` (HSTS) — mesmo gate que já controla o
   `secure=` dos cookies de sessão. Ver `docs/SEGURANCA.md`.
+- `PRISMA_WEB_URL` (já fixo em `deploy/docker-compose.yml` como
+  `https://wiki.ioi.ia.br/prisma`) é a base usada pra montar o link de
+  ativação de conta (`/ativar-conta/{token}`) enviado por e-mail — se o
+  domínio da demo mudar, atualizar essa variável junto com
+  `PRISMA_CORS_ORIGINS`.
+- `SENDGRID_API_KEY`/`SENDGRID_FROM_EMAIL` — nunca no repositório, mesma
+  regra do `GROQ_API_KEY`. Sem eles, o e-mail de ativação simplesmente não
+  sai (log de aviso, nunca erro) e o gestor usa o link devolvido na tela —
+  ver "Cadastro, convite e ativação de conta" em `docs/SEGURANCA.md`.
 
 ## Atualizar a demo depois de um push
 ```bash

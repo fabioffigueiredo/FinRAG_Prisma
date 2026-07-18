@@ -12,12 +12,19 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const temSessao = request.cookies.has(COOKIE_SESSAO);
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname === "/cadastro") {
     if (temSessao) {
       const raiz = request.nextUrl.clone();
       raiz.pathname = "/";
       return NextResponse.redirect(raiz);
     }
+    return NextResponse.next();
+  }
+
+  // /ativar-conta/{token} é pública em qualquer estado de sessão — o próprio
+  // POST /auth/ativar-conta emite uma sessão nova ao final (mesmo contrato
+  // de um link de "definir senha" aberto de qualquer lugar).
+  if (pathname.startsWith("/ativar-conta/")) {
     return NextResponse.next();
   }
 

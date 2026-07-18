@@ -308,12 +308,15 @@ export type Iniciar2FAResultado =
   | { ok: true; otpauthUri: string; qrBase64: string }
   | { ok: false; erro: string };
 
-export async function iniciarEnrollment2FA(): Promise<Iniciar2FAResultado> {
+/** `senhaAtual` só é exigido pela API quando já existe um 2FA ativo (troca de
+ * dispositivo self-service) — no 1º enrollment é ignorado. */
+export async function iniciarEnrollment2FA(senhaAtual?: string): Promise<Iniciar2FAResultado> {
   try {
     const res = await fetch(`${BASE}/auth/2fa/iniciar`, {
       method: "POST",
       credentials: "include",
       headers: headersComCsrf(),
+      body: JSON.stringify(senhaAtual ? { senha_atual: senhaAtual } : {}),
     });
     const corpo = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível iniciar o 2FA" };
@@ -529,6 +532,141 @@ export async function getHistoricoAcessos(usuarioId: number): Promise<{ ok: bool
     return (await res.json()) as { ok: boolean; eventos: EventoAcesso[] };
   } catch {
     return { ok: false, eventos: [] };
+  }
+}
+
+// --- Cadastro / convite / ativação de conta ---------------------------------
+//
+// Nunca envia senha por e-mail — os dois fluxos (autocadastro aprovado e
+// convite direto do gestor) convergem no mesmo link de ativação de uso
+// único (ver services/prisma-api/convite.py e docs/SEGURANCA.md).
+
+export type PendenteCadastro = {
+  id: number;
+  matricula: string;
+  nome: string;
+  email: string | null;
+  telefone: string | null;
+};
+
+export async function solicitarCadastro(dados: {
+  matricula: string;
+  nome: string;
+  email: string;
+  telefone?: string;
+}): Promise<{ ok: boolean; erro?: string }> {
+  const csrf = getCsrfToken();
+  try {
+    const res = await fetch(`${BASE}/auth/cadastro`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(csrf ? { "X-CSRF-Token": csrf } : {}) },
+      body: JSON.stringify(dados),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível enviar o cadastro" };
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function listarPendentes(): Promise<{ ok: boolean; usuarios: PendenteCadastro[] }> {
+  try {
+    const res = await fetch(`${BASE}/usuarios/pendentes`, { credentials: "include" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as { ok: boolean; usuarios: PendenteCadastro[] };
+  } catch {
+    return { ok: false, usuarios: [] };
+  }
+}
+
+export type ConviteResultado =
+  | { ok: true; linkAtivacao: string; emailEnviado: boolean }
+  | { ok: false; erro: string };
+
+export async function aprovarCadastro(usuarioId: number, papel?: string): Promise<ConviteResultado> {
+  try {
+    const res = await fetch(`${BASE}/usuarios/${usuarioId}/aprovar`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+      body: JSON.stringify(papel ? { papel } : {}),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível aprovar o cadastro" };
+    return { ok: true, linkAtivacao: corpo.link_ativacao, emailEnviado: corpo.email_enviado };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function rejeitarCadastro(usuarioId: number): Promise<{ ok: boolean; erro?: string }> {
+  try {
+    const res = await fetch(`${BASE}/usuarios/${usuarioId}/rejeitar`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível rejeitar o cadastro" };
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function criarConvite(dados: {
+  matricula: string;
+  nome: string;
+  papel: string;
+  email: string;
+  telefone?: string;
+}): Promise<ConviteResultado> {
+  try {
+    const res = await fetch(`${BASE}/usuarios/convite`, {
+      method: "POST",
+      credentials: "include",
+      headers: headersComCsrf(),
+      body: JSON.stringify(dados),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível criar o convite" };
+    return { ok: true, linkAtivacao: corpo.link_ativacao, emailEnviado: corpo.email_enviado };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export type ValidarConviteResultado =
+  | { ok: true; nome: string; matricula: string }
+  | { ok: false; erro: string };
+
+export async function validarConvite(token: string): Promise<ValidarConviteResultado> {
+  try {
+    const res = await fetch(`${BASE}/auth/convite/${encodeURIComponent(token)}`);
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "link inválido ou expirado" };
+    return { ok: true, nome: corpo.nome, matricula: corpo.matricula };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
+  }
+}
+
+export async function ativarConta(token: string, novaSenha: string): Promise<LoginResultado> {
+  const csrf = getCsrfToken();
+  try {
+    const res = await fetch(`${BASE}/auth/ativar-conta`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(csrf ? { "X-CSRF-Token": csrf } : {}) },
+      body: JSON.stringify({ token, nova_senha: novaSenha }),
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível ativar a conta" };
+    return { ok: true, nome: corpo.nome, papel: corpo.papel, gestora_id: corpo.gestora_id, requer2fa: !!corpo.requer_2fa };
+  } catch {
+    return { ok: false, erro: "sem conexão com a API" };
   }
 }
 
