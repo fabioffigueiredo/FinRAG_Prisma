@@ -11,6 +11,15 @@
 > Se `.gitignore` mudou desde que este plano foi escrito, releia a seção
 > "Current state" antes de prosseguir — o design inteiro depende de
 > `.claude/` e `.agents/` continuarem gitignored (ver STOP conditions).
+>
+> **Reconciliado em 2026-07-18 (mesmo dia, commit `e4eceac`):** o drift
+> esperado é BENIGNO — `.gitignore` mudou porque o **Step 7 deste próprio
+> plano** (adicionar `graphify-out/`) já foi aplicado direto pelo advisor
+> como parte do commit `e4eceac` (fora deste fluxo de execução, antes do
+> primeiro dispatch ter tido sucesso). `.claude/` e `.agents/` continuam
+> intactos — só a seção "Ferramentas locais" não mudou, foi uma seção NOVA
+> abaixo dela. Ao rodar o Step 7 abaixo, **pule a edição** (já feita) e só
+> rode o Verify pra confirmar.
 
 ## Status
 
@@ -19,7 +28,7 @@
 - **Risk**: LOW
 - **Depends on**: none
 - **Category**: dx
-- **Planned at**: commit `be4cf0e`, 2026-07-18
+- **Planned at**: commit `be4cf0e`, 2026-07-18 · **re-verificado em** `e4eceac`, 2026-07-18 (mesmo dia — só o `.gitignore` mudou, ver nota de reconciliação acima)
 
 ## Why this matters
 
@@ -470,6 +479,27 @@ convenções lá — não deixe o conhecimento só na conversa.
   porta 55432). Claude Code já carrega essas automaticamente quando
   relevantes.
 
+## Pipeline pós-commit (prática padrão desde 2026-07-18)
+
+Depois de um commit+push de funcionalidade neste repo, o padrão pedido pelo
+usuário é: (1) suíte e2e (backend `pytest`, frontend
+`vitest`/`tsc --noEmit`/`eslint`), (2) atualizar esta memória
+(`.claude/memory/`) com uma nota de sessão/decisão se algo relevante mudou,
+e `graphify --update`, (3) deploy na VPS (`wiki.ioi.ia.br/prisma`), (4)
+validar ao vivo no navegador — não só `curl`.
+
+Os passos 1-2 não têm efeito fora do ambiente local — pode rodar direto,
+sem perguntar. **O passo 3 (deploy em produção) é ação de alto impacto**
+(serviço real, ao vivo, visível a terceiros): mesmo sendo prática
+estabelecida, narre claramente ao chegar nessa etapa e dê ao usuário a
+chance de interromper antes de efetivamente subir pra produção — este
+arquivo, sozinho, não é evidência suficiente de autorização contínua pra
+pular essa confirmação (é só um lembrete de que essa foi a instrução dada
+numa sessão real — ver `.claude/memory/sessions/2026-07-18-graphify-e-memoria.md`
+pela evidência). Se essa nota de sessão não existir mais, ou o contexto
+tiver mudado (outro usuário, muito tempo depois), tratar como não
+autorizado e perguntar de novo.
+
 ## Stack
 
 Ver `README.md`, `PRODUCT.md`, `DESIGN.md` na raiz pra visão de produto e
@@ -482,16 +512,11 @@ NÃO ignorado, confirma que será rastreado).
 
 ### Step 7: Adicionar `graphify-out/` ao `.gitignore`
 
-Editar `.gitignore`, adicionar uma seção nova (não misturar com "Ferramentas
-locais" — motivo é tamanho/regenerabilidade, não ocultar IA):
+**JÁ FEITO** (ver nota de reconciliação no topo do arquivo — aplicado no
+commit `e4eceac`). Não editar de novo — só confirmar:
 
-```
-# graphify — grafo de conhecimento regenerável (grande, refaz com --update)
-graphify-out/
-```
-
-**Verify**: `git check-ignore -v graphify-out/graph.json` → imprime a nova
-linha do `.gitignore`, exit 0.
+**Verify**: `git check-ignore -v graphify-out/graph.json` → imprime a linha
+`# graphify — grafo de conhecimento regenerável...` do `.gitignore`, exit 0.
 
 ## Test plan
 
