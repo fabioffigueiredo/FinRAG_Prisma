@@ -291,3 +291,15 @@ def test_revogar_sessao_e_trocar_senha_em_sequencia_nao_vaza_entre_usuarios(clie
     assert auth.verificar_senha("senha123", gestor.senha_hash), \
         "BUG CONFIRMADO: editar outro usuário alterou a senha do gestor logado"
 
+
+def test_papel_do_usuario_criado_bate_com_o_pedido(client, db):
+    """Investigação da segunda suspeita da narração: papel do usuário criado
+    diverge do pedido no formulário."""
+    _gestora_com_usuario(db, matricula="GESTOR-O1", gestora_nome="Gestora O")
+    _login(client, "GESTOR-O1")
+    resp = client.post("/usuarios", json={
+        "matricula": "NOVO-O1", "nome": "Fulano", "papel": "analista",
+        "senha": "Senha-Nova-123!",
+    }, headers=_csrf_headers(client))
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["papel"] == "analista"
