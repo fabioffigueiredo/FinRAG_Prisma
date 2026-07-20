@@ -212,3 +212,94 @@ def test_usuario_nao_pode_se_autodesativar(client, db):
     meu_id = next(u["id"] for u in resp.json()["usuarios"] if u["matricula"] == "GESTOR-M1")
     resp = client.patch(f"/usuarios/{meu_id}", json={"ativo": False}, headers=_csrf_headers(client))
     assert resp.status_code == 400
+
+
+# --- investigação plan 003: suspeita de contaminação de senha entre usuários -
+
+def test_trocar_senha_de_um_usuario_nao_afeta_outro(client, db):
+    """Regressão direta da suspeita levantada em teste manual (ver
+    plans/003-verificar-isolamento-senha-usuarios.md): trocar a senha do
+    usuário B não pode mudar a senha do usuário A, nem deixar a senha
+    antiga de B ainda válida."""
+    gestora, gestor = _gestora_com_usuario(db, matricula="GESTOR-N1", gestora_nome="Gestora N")
+    usuario_a = Usuario(matricula="USER-A1", nome="Usuario A", senha_hash=auth.hash_senha("senha-a-original"),
+                       papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True)
+    usuario_b = Usuario(matricula="USER-B1", nome="Usuario B", senha_hash=auth.hash_senha("senha-b-original"),
+                       papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True)
+    db.add_all([usuario_a, usuario_b])
+    db.flush()
+    usuario_b_id = usuario_b.id
+
+    _login(client, "GESTOR-N1")
+    resp = client.patch(f"/usuarios/{usuario_b_id}", json={"senha": "Senha-B-Nova-123!"},
+                        headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    db.refresh(usuario_a)
+    db.refresh(usuario_b)
+
+    # A não pode ter mudado
+    assert auth.verificar_senha("senha-a-original", usuario_a.senha_hash), \
+        "BUG CONFIRMADO: trocar a senha de B alterou a senha de A"
+
+    # B tem que estar com a senha NOVA (e a antiga tem que ter deixado de valer)
+    assert auth.verificar_senha("Senha-B-Nova-123!", usuario_b.senha_hash)
+    assert not auth.verificar_senha("senha-b-original", usuario_b.senha_hash)
+
+    # end-to-end via login de verdade, não só hash direto
+    client.cookies.clear()
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": "USER-A1", "senha": "senha-a-original"},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code == 200, \
+        f"BUG CONFIRMADO: senha original de A parou de funcionar após troca de senha de B: {resp.text}"
+
+    client.cookies.clear()
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": "USER-B1", "senha": "Senha-B-Nova-123!"},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code == 200, f"senha nova de B deveria logar: {resp.text}"
+
+    client.cookies.clear()
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": "USER-B1", "senha": "senha-b-original"},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code != 200, \
+        "BUG CONFIRMADO: senha antiga de B ainda loga depois da troca"
+
+
+def test_revogar_sessao_e_trocar_senha_em_sequencia_nao_vaza_entre_usuarios(client, db):
+    """Cenário exato da narração original: revogar sessão de um usuário e,
+    em seguida, trocar sua senha, não pode afetar a senha do gestor logado
+    que está fazendo as duas operações."""
+    gestora, gestor = _gestora_com_usuario(db, matricula="GESTOR-N2", gestora_nome="Gestora N2")
+    usuario_a = Usuario(matricula="USER-A2", nome="Usuario A2", senha_hash=auth.hash_senha("senha-a2-original"),
+                       papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True)
+    db.add(usuario_a)
+    db.flush()
+    usuario_a_id = usuario_a.id
+
+    _login(client, "GESTOR-N2")
+    resp = client.post(f"/usuarios/{usuario_a_id}/revogar-sessao", headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+    resp = client.patch(f"/usuarios/{usuario_a_id}", json={"senha": "Senha-A2-Nova-123!"},
+                        headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    # a senha do PRÓPRIO gestor não pode ter mudado
+    db.refresh(gestor)
+    assert auth.verificar_senha("senha123", gestor.senha_hash), \
+        "BUG CONFIRMADO: editar outro usuário alterou a senha do gestor logado"
+
+
+def test_papel_do_usuario_criado_bate_com_o_pedido(client, db):
+    """Investigação da segunda suspeita da narração: papel do usuário criado
+    diverge do pedido no formulário."""
+    _gestora_com_usuario(db, matricula="GESTOR-O1", gestora_nome="Gestora O")
+    _login(client, "GESTOR-O1")
+    resp = client.post("/usuarios", json={
+        "matricula": "NOVO-O1", "nome": "Fulano", "papel": "analista",
+        "senha": "Senha-Nova-123!",
+    }, headers=_csrf_headers(client))
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["papel"] == "analista"
