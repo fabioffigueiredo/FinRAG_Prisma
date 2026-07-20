@@ -325,6 +325,7 @@ function PrismaMessage({
   onAcao: (prompt: string) => void;
 }) {
   const bloqueado = data.bloqueados.length > 0;
+  const degradado = data.degradado === true;
   const { shown, done } = useTypewriter(data.resposta, onGrow);
 
   return (
@@ -407,6 +408,11 @@ function PrismaMessage({
               <div className="flex items-center gap-2 rounded-lg border border-[var(--chart-5)]/40 bg-[var(--chart-5)]/10 px-3 py-1.5 text-xs text-[var(--chart-5)]">
                 <ShieldCheck className="h-4 w-4" strokeWidth={1.75} />
                 Pergunta fora de escopo: o Prisma explica resultados, não recomenda investimentos.
+              </div>
+            ) : degradado ? (
+              <div className="flex items-center gap-2 rounded-lg border border-[var(--chart-5)]/40 bg-[var(--chart-5)]/10 px-3 py-1.5 text-xs text-[var(--chart-5)]">
+                <ShieldAlert className="h-4 w-4" strokeWidth={1.75} />
+                Modo demonstração — motor de IA real indisponível nesta consulta. Resposta gerada por regra fixa, não é análise fundamentada; não use para decisão.
               </div>
             ) : (
               <div

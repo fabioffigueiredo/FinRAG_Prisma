@@ -2,13 +2,14 @@
 import re
 
 _PADROES = [
-    r"devo\s+(comprar|vender|investir|aplicar|resgatar)",
+    r"devo\s+(comprar|vender|investir|aplicar|resgatar|sair|entrar)",
     r"recomend",
     r"previs[aã]o",
     r"vai\s+(subir|cair|render)",
-    r"melhor\s+(fundo|investimento|aplica[cç][aã]o)\s+para",
-    r"o\s+que\s+(comprar|vender)",
-    r"vale\s+a\s+pena\s+(investir|comprar|aplicar)",
+    r"melhor\s+(fundo|investimento|aplica[cç][aã]o)\s+(para|pra)",
+    r"o\s+que\s+(eu\s+)?(compr(ar|o|a)|vend(er|o|e))",
+    r"(vale\s+a\s+pena|compensa)\s+(investir|comprar|aplicar|resgatar|sair|vender)",
+    r"bom\s+momento\s+(para|pra)\s+(comprar|vender|resgatar|sair|entrar)",
 ]
 _RX = re.compile("|".join(_PADROES), re.IGNORECASE)
 

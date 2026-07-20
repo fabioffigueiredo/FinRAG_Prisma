@@ -8,6 +8,9 @@ from __future__ import annotations
 import json
 import re
 
+from sinais import gerar_sinais, AVISO_LEGAL as SINAIS_AVISO_LEGAL
+from radar import agregar as agregar_noticias
+
 DIMENSOES_VALIDAS = [
     "estrategia", "grupo_contabil", "supergrupo", "vencimento",
     "privados", "renda_variavel", "renda_fixa", "ativos",
@@ -23,6 +26,13 @@ _ALIASES_DIMENSAO = {
     "renda fixa": "renda_fixa",
 }
 _ALIASES_FUNDO = {"alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12"}
+# Palavras genéricas demais para servir de "apelido" de um fundo no laço
+# primeira_palavra de _detectar_fundo_citado — "fundo"/"fundos" é a colisão
+# que motivou isto (fixtures de teste nomeiam fundos como "Fundo {codigo}",
+# então a palavra genérica "fundo" numa pergunta batia com qualquer fundo);
+# fic/fim/fia são sufixos comuns de estrutura de fundo brasileiro, igualmente
+# não-distintivos (ver plans/006-avisar-fundo-nao-reconhecido-no-mock.md).
+_PALAVRAS_GENERICAS_NOME = {"fundo", "fundos", "fic", "fim", "fia"}
 
 SISTEMA_AGENTE = (
     "Você é o Prisma, copiloto de atribuição de performance para gestores de fundos. "
@@ -32,6 +42,9 @@ SISTEMA_AGENTE = (
     "chame a ferramenta apropriada antes de responder; use resolver_fundo primeiro se o "
     "usuário mencionar o fundo por nome. Se a pergunta for sobre mudança/evolução entre "
     "períodos ('o que mudou', 'comparado ao trimestre passado'), use comparar_periodos. "
+    "Se a pergunta for sobre indicação, sinal ou notícia de mercado para o fundo/estratégia, "
+    "use obter_sinais_mercado — nunca infira sinal de mercado sem chamar essa ferramenta, e "
+    "sempre inclua o aviso legal retornado por ela na resposta. "
     "Depois de obter os dados, escreva um parágrafo "
     "curto e objetivo em português explicando o resultado, citando os números retornados "
     "e mencionando qualquer aviso da ferramenta. Não recomende compra/venda nem faça "
@@ -135,6 +148,26 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "obter_sinais_mercado",
+            "description": (
+                "Retorna o alerta probabilístico de risco por estratégia do fundo, "
+                "calculado por um modelo de regras transparente sobre o sentimento das "
+                "notícias do radar de mercado (nível, probabilidade, evidências citadas "
+                "por id de notícia, aviso legal). NUNCA é recomendação de compra/venda "
+                "nem previsão — é um sinal de apoio à decisão. Use para 'qual a indicação "
+                "do mercado', 'tem algum sinal de risco', 'o que as notícias dizem sobre "
+                "esse fundo/estratégia', 'probabilidade desse fundo cair'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"fundo": {"type": "string", "description": "Código do fundo (ex. ALFA-33)"}},
+                "required": ["fundo"],
+            },
+        },
+    },
 ]
 
 
@@ -198,8 +231,25 @@ def _detectar_fundo_citado(pergunta: str, fundos: dict) -> str | None:
             return cod
     for cod, f in fundos.items():
         primeira_palavra = f["fundo"]["nome"].split()[0].lower()
-        if len(primeira_palavra) > 3 and re.search(rf"\b{re.escape(primeira_palavra)}\b", texto):
+        if (len(primeira_palavra) > 3 and primeira_palavra not in _PALAVRAS_GENERICAS_NOME
+                and re.search(rf"\b{re.escape(primeira_palavra)}\b", texto)):
             return cod
+    return None
+
+
+_PADRAO_CODIGO_FUNDO = re.compile(r"\b[A-Za-zÀ-ú]{2,10}-\d{1,4}\b")
+
+
+def _fundo_nao_reconhecido_citado(pergunta: str, fundos: dict) -> str | None:
+    """Se a pergunta menciona algo no formato de código de fundo
+    (LETRAS-NÚMERO, ex. 'XYZ-99') que não bate com nenhum fundo conhecido,
+    devolve esse texto em maiúsculas — pra `analisar_mock` avisar o usuário
+    em vez de responder silenciosamente sobre outro fundo (ver
+    plans/006-avisar-fundo-nao-reconhecido-no-mock.md)."""
+    for m in _PADRAO_CODIGO_FUNDO.finditer(pergunta or ""):
+        candidato = m.group(0).upper()
+        if candidato not in fundos:
+            return candidato
     return None
 
 
@@ -313,6 +363,20 @@ def _tool_obter_resumo(fundos: dict, args: dict) -> dict:
     }
 
 
+def _tool_obter_sinais_mercado(fundos: dict, noticias: list[dict], args: dict) -> dict:
+    cod = _match_fundo(fundos, args.get("fundo", "")) or args.get("fundo")
+    f = fundos.get(cod)
+    if not f:
+        return {"erro": f"fundo '{args.get('fundo')}' não encontrado"}
+    if not noticias:
+        return {"fundo": cod, "nome_fundo": f["fundo"]["nome"], "sinais": [],
+                "aviso": "Radar de notícias sem dados no momento — sem base para gerar sinal.",
+                "aviso_legal": SINAIS_AVISO_LEGAL}
+    sinais = gerar_sinais(f, agregar_noticias(noticias), noticias)
+    return {"fundo": cod, "nome_fundo": f["fundo"]["nome"], "sinais": sinais,
+            "aviso_legal": SINAIS_AVISO_LEGAL}
+
+
 def _tool_comparar_periodos(fundos: dict, args: dict) -> dict:
     cod = _match_fundo(fundos, args.get("fundo", "")) or args.get("fundo")
     f = fundos.get(cod)
@@ -344,7 +408,7 @@ def _tool_comparar_periodos(fundos: dict, args: dict) -> dict:
     return comparacao
 
 
-def _tool_dispatch(nome: str, args: dict, fundos: dict) -> dict:
+def _tool_dispatch(nome: str, args: dict, fundos: dict, noticias: list[dict]) -> dict:
     if nome == "resolver_fundo":
         return _tool_resolver_fundo(fundos, args)
     if nome == "obter_atribuicao":
@@ -355,6 +419,8 @@ def _tool_dispatch(nome: str, args: dict, fundos: dict) -> dict:
         return _tool_obter_resumo(fundos, args)
     if nome == "comparar_periodos":
         return _tool_comparar_periodos(fundos, args)
+    if nome == "obter_sinais_mercado":
+        return _tool_obter_sinais_mercado(fundos, noticias, args)
     return {"erro": f"ferramenta desconhecida: {nome}"}
 
 
@@ -384,6 +450,8 @@ def _bloco_grafico(nome_tool: str, out: dict) -> dict | None:
             "titulo": f"Resumo — {out['nome_fundo']}",
             "dados": {"resumo": out["resumo"]},
         }
+    if nome_tool == "obter_sinais_mercado":
+        return None  # sinal é texto narrado, sem bloco de gráfico dedicado (Meta atual)
     return None
 
 
@@ -393,11 +461,12 @@ def _gerar_acoes(consulta_echo: dict) -> list[dict]:
         {"label": "Comparar Benchmarks", "prompt": f"Compare o {fundo} com o Ibovespa e o IMA-B"},
         {"label": "Ver por Grupo Contábil", "prompt": f"Mostre a atribuição do {fundo} por grupo contábil"},
         {"label": "Evolução no período", "prompt": f"Mostre o gráfico de evolução do {fundo} no período"},
+        {"label": "Sinais de Mercado", "prompt": f"Qual a indicação de mercado para o {fundo}?"},
         {"label": "Exportar Relatório", "prompt": "__exportar_pdf__"},
     ]
 
 
-def analisar(*, pergunta: str, fundo_ativo: str, backend, fundos: dict, max_turns: int = 4) -> dict:
+def analisar(*, pergunta: str, fundo_ativo: str, backend, fundos: dict, noticias: list[dict], max_turns: int = 4) -> dict:
     """Loop de agente com tool-calling. `backend` é um cliente com .chat(messages, tools, temperature)."""
     blocos: list[dict] = []
     consulta_echo: dict = {}
@@ -437,7 +506,7 @@ def analisar(*, pergunta: str, fundo_ativo: str, backend, fundos: dict, max_turn
             ],
         })
         for tc in result["tool_calls"]:
-            out = _tool_dispatch(tc["name"], tc["arguments"], fundos)
+            out = _tool_dispatch(tc["name"], tc["arguments"], fundos, noticias)
             tool_trace.append({"tool": tc["name"], "args": tc["arguments"]})
             if tc["name"] in ("obter_atribuicao", "obter_serie", "obter_resumo",
                              "comparar_periodos") and "erro" not in out:
@@ -466,12 +535,63 @@ def analisar(*, pergunta: str, fundo_ativo: str, backend, fundos: dict, max_turn
     }
 
 
-def analisar_mock(*, fundo_ativo: str, fundos: dict, pergunta: str = "") -> dict:
-    """Caminho determinístico para o motor Demo (sem tool-calling): chama a tool
-    diretamente e narra com texto fixo, para o modo Demo nunca quebrar."""
+_PALAVRAS_SINAL = ("sinal", "sinais", "indicaç", "notícia", "noticia", "mercado", "risco")
+_PALAVRAS_EVOLUCAO = ("evoluç", "gráfico", "grafico", "linha do tempo", "ao longo do")
+_PALAVRAS_GRUPO_CONTABIL = ("grupo contábil", "grupo contabil")
+
+
+def analisar_mock(*, fundo_ativo: str, fundos: dict, noticias: list[dict] | None = None, pergunta: str = "") -> dict:
+    """Caminho determinístico para o motor Demo (sem tool-calling): NÃO chama
+    LLM, mas escolhe a tool certa por palavra-chave da pergunta — pra não
+    devolver a mesma narrativa de atribuição pra qualquer pergunta (ver
+    plans/002-copiloto-sinais-mercado-e-degradado-visivel.md, achado
+    original: motor Demo respondia igual pra 'rentabilidade' e 'indicação
+    de mercado')."""
+    noticias = noticias or []
     fundo_citado = _detectar_fundo_citado(pergunta, fundos)
+    if not fundo_citado:
+        nao_reconhecido = _fundo_nao_reconhecido_citado(pergunta, fundos)
+        if nao_reconhecido:
+            return {"resposta": f"(Demonstração) Fundo '{nao_reconhecido}' não encontrado — "
+                                f"verifique o código e tente novamente.",
+                    "consulta_echo": {}, "blocos": [], "acoes": [], "avisos": [], "tool_trace": []}
     fundo_alvo = fundo_citado or fundo_ativo
-    out = _tool_obter_atribuicao(fundos, {"fundo": fundo_alvo})
+    pergunta_low = (pergunta or "").lower()
+
+    if any(p in pergunta_low for p in _PALAVRAS_SINAL):
+        out = _tool_obter_sinais_mercado(fundos, noticias, {"fundo": fundo_alvo})
+        if "erro" in out:
+            return {"resposta": out["erro"], "consulta_echo": {}, "blocos": [], "acoes": [], "avisos": [], "tool_trace": []}
+        if not out["sinais"]:
+            resposta = (
+                f"(Demonstração) Sem sinal de mercado disponível para {out['nome_fundo']} no momento "
+                f"— {out.get('aviso', 'radar sem notícias suficientes')}. {SINAIS_AVISO_LEGAL}"
+            )
+        else:
+            pior = out["sinais"][0]  # já vem ordenado por -prob_neg (maior risco primeiro)
+            resposta = (
+                f"(Demonstração) Para {out['nome_fundo']}, o sinal de maior atenção é em "
+                f"{pior['estrategia']}: nível {pior['nivel']}, probabilidade de contribuição "
+                f"negativa {pior['prob_neg']}% ({pior['base_calculo']}). {SINAIS_AVISO_LEGAL}"
+            )
+        consulta_echo = {"fundo": out["fundo"]}
+        return {"resposta": resposta, "consulta_echo": consulta_echo, "blocos": [],
+                "acoes": _gerar_acoes(consulta_echo), "avisos": [], "tool_trace": []}
+
+    if any(p in pergunta_low for p in _PALAVRAS_EVOLUCAO):
+        out = _tool_obter_serie(fundos, {"fundo": fundo_alvo})
+        if "erro" in out:
+            return {"resposta": out["erro"], "consulta_echo": {}, "blocos": [], "acoes": [], "avisos": [], "tool_trace": []}
+        bloco = _bloco_grafico("obter_serie", out)
+        resposta = f"(Demonstração) Evolução de {out['nome_fundo']} vs {out['benchmark']} no período — ver gráfico."
+        consulta_echo = {"fundo": out["fundo"], "benchmark": out["benchmark"]}
+        return {"resposta": resposta, "consulta_echo": consulta_echo, "blocos": [bloco] if bloco else [],
+                "acoes": _gerar_acoes(consulta_echo), "avisos": [out["aviso"]] if out.get("aviso") else [], "tool_trace": []}
+
+    dimensao_args = {"fundo": fundo_alvo}
+    if any(p in pergunta_low for p in _PALAVRAS_GRUPO_CONTABIL):
+        dimensao_args["dimensao"] = "grupo_contabil"
+    out = _tool_obter_atribuicao(fundos, dimensao_args)
     if "erro" in out:
         return {"resposta": out["erro"], "consulta_echo": {}, "blocos": [], "acoes": [], "avisos": [], "tool_trace": []}
     bloco = _bloco_grafico("obter_atribuicao", out)
@@ -483,8 +603,5 @@ def analisar_mock(*, fundo_ativo: str, fundos: dict, pergunta: str = "") -> dict
     )
     consulta_echo = {"fundo": out["fundo"], "periodo": out["periodo"], "benchmark": out["benchmark"],
                       "dimensao": out["dimensao_label"]}
-    return {
-        "resposta": resposta, "consulta_echo": consulta_echo, "blocos": [bloco] if bloco else [],
-        "acoes": _gerar_acoes(consulta_echo), "avisos": [out["aviso"]] if out.get("aviso") else [],
-        "tool_trace": [],
-    }
+    return {"resposta": resposta, "consulta_echo": consulta_echo, "blocos": [bloco] if bloco else [],
+            "acoes": _gerar_acoes(consulta_echo), "avisos": [out["aviso"]] if out.get("aviso") else [], "tool_trace": []}
