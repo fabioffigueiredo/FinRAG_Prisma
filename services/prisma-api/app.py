@@ -376,18 +376,31 @@ class Iniciar2FAReq(BaseModel):
 
 
 @app.post("/auth/2fa/iniciar", response_model=Iniciar2FAResp, dependencies=[Depends(auth.verificar_csrf)])
-def iniciar_2fa(req: Iniciar2FAReq = Iniciar2FAReq(),
+def iniciar_2fa(request: Request, req: Iniciar2FAReq = Iniciar2FAReq(),
                 usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance")),
                 db=Depends(get_db)):
-    """Gera o segredo e devolve o QR — NÃO ativa ainda. Só
-    /auth/2fa/confirmar ativa, depois de provar que o usuário configurou
-    certo num app autenticador de verdade.
+    """Fininho, mesmo motivo das outras rotas com rate limit (ver skill
+    fastapi-slowapi-future-annotations)."""
+    return _iniciar_2fa_com_rate_limit(request, req, usuario, db)
+
+
+@limiter.limit("5/minute")
+def _iniciar_2fa_com_rate_limit(request: Request, req: Iniciar2FAReq, usuario: auth.UsuarioAtual, db) -> Iniciar2FAResp:
+    """Gera o segredo e devolve o QR — NÃO ativa ainda, e não toca no 2FA já
+    ativo. Fica em staging (`totp_secret_pendente`); só /auth/2fa/confirmar
+    promove pra `totp_secret`/`totp_ativado`, depois de provar que o
+    usuário configurou certo num app autenticador de verdade. Abandonar o
+    fluxo aqui (fechar a aba, não escanear o QR) não desliga o 2FA que já
+    estava funcionando — o dispositivo antigo continua válido até o novo
+    ser confirmado.
 
     Step-up: se já existe um 2FA ativo (troca de dispositivo self-service),
-    exige a senha atual antes de sobrescrever o segredo — sem isso, um
-    cookie de sessão roubado sozinho bastaria pra sequestrar o 2FA (ver
-    docs/SEGURANCA.md). Primeiro enrollment (totp_ativado=False) não exige
-    nada além do papel."""
+    exige a senha atual antes de gerar um segredo novo em staging — sem
+    isso, um cookie de sessão roubado sozinho bastaria pra sequestrar o 2FA
+    (ver docs/SEGURANCA.md). Primeiro enrollment (totp_ativado=False) não
+    exige nada além do papel. O step-up usa o mesmo lockout do login
+    (`verificar_senha_com_lockout`) e rate limit de 5/minuto — sem isso,
+    um cookie de sessão roubado vira um oráculo de senha ilimitado."""
     import base64
     import io
 
@@ -398,12 +411,21 @@ def iniciar_2fa(req: Iniciar2FAReq = Iniciar2FAReq(),
 
     alvo = db.get(_Usuario, usuario.id)
     if alvo.totp_ativado:
-        if not req.senha_atual or not auth.verificar_senha(req.senha_atual, alvo.senha_hash):
+        senha_ok = auth.verificar_senha_com_lockout(alvo, req.senha_atual)
+        # Sempre commita — mesmo em falha — pra persistir o contador de
+        # tentativas/bloqueio (mesmo motivo do /auth/login).
+        db.commit()
+        if not senha_ok:
+            bloqueado = alvo.bloqueado_ate is not None
+            audit.registrar_evento(
+                rota="/auth/2fa/iniciar", ator_matricula=usuario.matricula,
+                descricao="step-up de senha falhou — conta bloqueada" if bloqueado else "step-up de senha falhou",
+                extra={"bloqueado": True} if bloqueado else None,
+            )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="senha atual incorreta")
 
     segredo = pyotp.random_base32()
-    alvo.totp_secret = segredo
-    alvo.totp_ativado = False
+    alvo.totp_secret_pendente = segredo
     db.commit()
 
     uri = pyotp.totp.TOTP(segredo).provisioning_uri(name=usuario.matricula, issuer_name="Prisma")
@@ -429,11 +451,13 @@ def confirmar_2fa(req: Confirmar2FAReq,
 
     from db.models import Usuario as _Usuario
     alvo = db.get(_Usuario, usuario.id)
-    if not alvo.totp_secret:
+    if not alvo.totp_secret_pendente:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="nenhum enrollment de 2FA em andamento — chame /auth/2fa/iniciar primeiro")
-    if not pyotp.TOTP(alvo.totp_secret).verify(req.codigo, valid_window=1):
+    if not pyotp.TOTP(alvo.totp_secret_pendente).verify(req.codigo, valid_window=1):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="código inválido")
+    alvo.totp_secret = alvo.totp_secret_pendente
+    alvo.totp_secret_pendente = None
     alvo.totp_ativado = True
     db.commit()
     audit.registrar_evento(rota="/auth/2fa/confirmar", ator_matricula=usuario.matricula,
@@ -535,11 +559,30 @@ def _link_ativacao(token: str) -> str:
     return f"{PRISMA_WEB_URL}/ativar-conta/{token}"
 
 
+class GestoraPublicaResp(BaseModel):
+    id: int
+    nome: str
+
+
+@app.get("/auth/gestoras", response_model=list[GestoraPublicaResp])
+def listar_gestoras_publico(db=Depends(get_db)):
+    """Pública de propósito — o formulário de autocadastro precisa saber
+    quais gestoras (tenants) existem pra oferecer a escolha. Só id/nome, sem
+    nenhum dado sensível."""
+    from sqlalchemy import select as _select
+
+    from db.models import Gestora as _Gestora
+
+    gestoras = db.scalars(_select(_Gestora).order_by(_Gestora.nome)).all()
+    return [GestoraPublicaResp(id=g.id, nome=g.nome) for g in gestoras]
+
+
 class CadastroReq(BaseModel):
     matricula: str
     nome: str
     email: str
     telefone: "str | None" = None
+    gestora_id: int
 
 
 @app.post("/auth/cadastro", status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth.verificar_csrf)])
@@ -554,9 +597,12 @@ def _solicitar_cadastro_com_rate_limit(request: Request, req: CadastroReq, db):
     """Rota pública — sempre cria `papel=analista` (decisão de produto: o
     formulário nem pergunta o papel; um gestor eleva na aprovação se quiser).
     `ativo=False` até aprovação — mesmo em teoria não daria pra logar sem
-    senha utilizável, mas fica explícito."""
+    senha utilizável, mas fica explícito.
+
+    `gestora_id` vem do próprio candidato (GET /auth/gestoras alimenta o
+    seletor no formulário) — sem isso, todo mundo caía na gestora de menor
+    id, misturando o tenant errado (achado de revisão)."""
     import secrets as _secrets
-    from sqlalchemy import select as _select
     from sqlalchemy.exc import IntegrityError
 
     from db.models import Gestora as _Gestora
@@ -564,10 +610,9 @@ def _solicitar_cadastro_com_rate_limit(request: Request, req: CadastroReq, db):
     from db.models import StatusCadastro as _StatusCadastro
     from db.models import Usuario as _Usuario
 
-    gestora = db.scalar(_select(_Gestora).order_by(_Gestora.id).limit(1))
+    gestora = db.get(_Gestora, req.gestora_id)
     if gestora is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            detail="nenhuma gestora cadastrada — não é possível processar o cadastro")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="gestora inválida")
 
     senha_inutilizavel = auth.hash_senha(_secrets.token_urlsafe(32))
     novo = _Usuario(matricula=req.matricula, nome=req.nome, senha_hash=senha_inutilizavel,
@@ -654,6 +699,13 @@ def _ativar_conta_com_rate_limit(request: Request, req: AtivarContaReq, response
     alvo.ativo = True
     alvo.convite_token = None
     alvo.convite_expira_em = None
+    # zera qualquer lockout acumulado ANTES da ativação — a conta convidada
+    # já existe com ativo=True e senha inutilizável desde a criação do
+    # convite, então um atacante pode ter esgotado as tentativas de login
+    # nesse meio-tempo. Provar posse do token é mais forte que a senha
+    # antiga, e o dono legítimo não deveria herdar um bloqueio alheio.
+    alvo.bloqueado_ate = None
+    alvo.tentativas_falhas = 0
     db.commit()
 
     auth.emitir_cookies_sessao(response, alvo)
@@ -1225,6 +1277,13 @@ def atualizar_usuario_rota(usuario_id: int, req: AtualizarUsuarioReq,
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                                 detail="não é possível desativar a própria conta")
         campos["ativo"] = req.ativo
+        if req.ativo is False:
+            # sem isso, um convite/autocadastro aprovado antes da
+            # desativação continua com o token de ativação válido por até
+            # 48h — quem tiver o link reativa a própria conta sozinho,
+            # desfazendo a decisão do admin (achado de revisão).
+            campos["convite_token"] = None
+            campos["convite_expira_em"] = None
     if req.senha is not None:
         from senha_policy import validar_senha
         violacoes = validar_senha(req.senha)
@@ -1290,6 +1349,7 @@ def resetar_2fa_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(auth.
                             detail="não é possível resetar o 2FA da própria conta")
     alvo.totp_secret = None
     alvo.totp_ativado = False
+    alvo.totp_secret_pendente = None
     db.commit()
     audit.registrar_evento(rota="/usuarios/resetar-2fa", ator_matricula=usuario.matricula,
                            descricao=f"2FA resetado: {alvo.matricula}")

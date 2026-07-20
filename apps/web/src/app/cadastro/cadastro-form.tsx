@@ -6,19 +6,23 @@ import { CheckCircle2 } from "lucide-react";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { getCsrf, solicitarCadastro } from "@/lib/api";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getCsrf, listarGestorasPublico, solicitarCadastro, type GestoraPublica } from "@/lib/api";
 
 export function CadastroForm() {
   const [matricula, setMatricula] = useState("");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [gestoras, setGestoras] = useState<GestoraPublica[]>([]);
+  const [gestoraId, setGestoraId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
 
   useEffect(() => {
     getCsrf();
+    listarGestorasPublico().then(({ gestoras }) => setGestoras(gestoras));
   }, []);
 
   async function onSubmit(e: FormEvent) {
@@ -30,6 +34,7 @@ export function CadastroForm() {
       nome,
       email,
       telefone: telefone || undefined,
+      gestora_id: Number(gestoraId),
     });
     setEnviando(false);
     if (!resultado.ok) {
@@ -90,11 +95,32 @@ export function CadastroForm() {
           <FieldLabel htmlFor="telefone">Telefone (opcional)</FieldLabel>
           <Input id="telefone" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
         </Field>
+        <Field>
+          <FieldLabel htmlFor="gestora">Gestora</FieldLabel>
+          <Select
+            items={gestoras.map((g) => ({ value: String(g.id), label: g.nome }))}
+            value={gestoraId}
+            onValueChange={(v) => setGestoraId(v ?? "")}
+          >
+            <SelectTrigger id="gestora" className="w-full">
+              <SelectValue placeholder="Selecione a gestora" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {gestoras.map((g) => (
+                  <SelectItem key={g.id} value={String(g.id)}>
+                    {g.nome}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
         <Button
           type="submit"
           variant="warning"
           size="lg"
-          disabled={enviando || !matricula || !nome || !email}
+          disabled={enviando || !matricula || !nome || !email || !gestoraId}
           className="mt-1 w-full"
         >
           {enviando ? "Enviando…" : "Solicitar cadastro"}

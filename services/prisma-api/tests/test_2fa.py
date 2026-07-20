@@ -98,7 +98,8 @@ def test_iniciar_enrollment_gera_segredo_sem_ativar(client, db):
     assert len(corpo["qr_base64"]) > 100
 
     alvo = db.query(Usuario).filter(Usuario.matricula == "G2FA-001").one()
-    assert alvo.totp_secret is not None
+    assert alvo.totp_secret is None
+    assert alvo.totp_secret_pendente is not None
     assert alvo.totp_ativado is False
 
 
@@ -121,6 +122,8 @@ def test_confirmar_com_codigo_real_ativa_2fa(client, db):
 
     alvo = db.query(Usuario).filter(Usuario.matricula == "G2FA-002").one()
     assert alvo.totp_ativado is True
+    assert alvo.totp_secret == secret
+    assert alvo.totp_secret_pendente is None
 
 
 def test_confirmar_com_codigo_errado_nao_ativa(client, db):
