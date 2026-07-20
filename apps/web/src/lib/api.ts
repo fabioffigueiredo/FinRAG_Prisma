@@ -549,11 +549,24 @@ export type PendenteCadastro = {
   telefone: string | null;
 };
 
+export type GestoraPublica = { id: number; nome: string };
+
+export async function listarGestorasPublico(): Promise<{ ok: boolean; gestoras: GestoraPublica[] }> {
+  try {
+    const res = await fetch(`${BASE}/auth/gestoras`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { ok: true, gestoras: (await res.json()) as GestoraPublica[] };
+  } catch {
+    return { ok: false, gestoras: [] };
+  }
+}
+
 export async function solicitarCadastro(dados: {
   matricula: string;
   nome: string;
   email: string;
   telefone?: string;
+  gestora_id: number;
 }): Promise<{ ok: boolean; erro?: string }> {
   const csrf = getCsrfToken();
   try {

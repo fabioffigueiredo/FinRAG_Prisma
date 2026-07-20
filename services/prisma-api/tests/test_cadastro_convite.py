@@ -111,9 +111,10 @@ def _bootstrap_csrf_publico(client) -> dict:
 # --- autocadastro -------------------------------------------------------------
 
 def test_autocadastro_cria_usuario_pendente_analista_inativo(client, db):
-    _gestora_com_usuario(db, matricula="G-CAD-001")
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-001")
     resp = client.post("/auth/cadastro", json={
         "matricula": "NOVO-CAD-1", "nome": "Fulano Pendente", "email": "fulano@example.com",
+        "gestora_id": gestora.id,
     }, headers=_bootstrap_csrf_publico(client))
     assert resp.status_code == 201, resp.text
 
@@ -121,25 +122,61 @@ def test_autocadastro_cria_usuario_pendente_analista_inativo(client, db):
     assert novo.status_cadastro == StatusCadastro.PENDENTE
     assert novo.papel == Papel.ANALISTA
     assert novo.ativo is False
+    assert novo.gestora_id == gestora.id
+
+
+def test_autocadastro_com_duas_gestoras_respeita_a_escolhida(client, db):
+    """Regressão: autocadastro antes caía sempre na gestora de menor id,
+    ignorando qual tenant o candidato escolheu."""
+    _gestora_com_usuario(db, matricula="G-CAD-001B", gestora_nome="Gestora Cadastro Primeira")
+    segunda, _ = _gestora_com_usuario(db, matricula="G-CAD-001C", gestora_nome="Gestora Cadastro Segunda")
+
+    resp = client.post("/auth/cadastro", json={
+        "matricula": "NOVO-CAD-1B", "nome": "Fulano da Segunda", "email": "fulano2@example.com",
+        "gestora_id": segunda.id,
+    }, headers=_bootstrap_csrf_publico(client))
+    assert resp.status_code == 201, resp.text
+
+    novo = db.query(Usuario).filter(Usuario.matricula == "NOVO-CAD-1B").one()
+    assert novo.gestora_id == segunda.id
+
+
+def test_autocadastro_com_gestora_inexistente_retorna_422(client, db):
+    resp = client.post("/auth/cadastro", json={
+        "matricula": "NOVO-CAD-1D", "nome": "Fulano", "email": "fulano3@example.com",
+        "gestora_id": 999999,
+    }, headers=_bootstrap_csrf_publico(client))
+    assert resp.status_code == 422
+
+
+def test_listar_gestoras_publico_devolve_id_e_nome(client, db):
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-001E", gestora_nome="Gestora Cadastro Listagem")
+    resp = client.get("/auth/gestoras")
+    assert resp.status_code == 200, resp.text
+    nomes = {g["nome"]: g["id"] for g in resp.json()}
+    assert nomes.get("Gestora Cadastro Listagem") == gestora.id
 
 
 def test_autocadastro_matricula_duplicada_retorna_409(client, db):
-    _gestora_com_usuario(db, matricula="G-CAD-002")
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-002")
     resp = client.post("/auth/cadastro", json={
         "matricula": "NOVO-CAD-2", "nome": "Fulano", "email": "a@example.com",
+        "gestora_id": gestora.id,
     }, headers=_bootstrap_csrf_publico(client))
     assert resp.status_code == 201
 
     resp = client.post("/auth/cadastro", json={
         "matricula": "NOVO-CAD-2", "nome": "Outro", "email": "b@example.com",
+        "gestora_id": gestora.id,
     }, headers=_bootstrap_csrf_publico(client))
     assert resp.status_code == 409
 
 
 def test_autocadastro_sem_csrf_e_rejeitado(client, db):
-    _gestora_com_usuario(db, matricula="G-CAD-003")
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-003")
     resp = client.post("/auth/cadastro", json={
         "matricula": "NOVO-CAD-3", "nome": "Fulano", "email": "a@example.com",
+        "gestora_id": gestora.id,
     })
     assert resp.status_code == 403
 
@@ -342,6 +379,62 @@ def test_ativar_conta_senha_fraca_e_rejeitada(client, db):
     assert resp.status_code == 422
 
 
+def test_desativar_conta_convidada_invalida_o_convite(client, db):
+    """Regressão: desativar um convite pendente (PATCH ativo=false) tem
+    que revogar o token — senão o convidado reativa a própria conta
+    sozinho, desfazendo a decisão do admin."""
+    from datetime import datetime, timedelta, timezone
+    gestora, admin = _gestora_com_usuario(db, matricula="G-CAD-023")
+    convidado = Usuario(matricula="PEND-K", nome="Pendente K", senha_hash=auth.hash_senha("x"),
+                        papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True,
+                        status_cadastro=StatusCadastro.APROVADO,
+                        convite_token="token-revogar-123",
+                        convite_expira_em=datetime.now(timezone.utc) + timedelta(hours=1))
+    db.add(convidado)
+    db.flush()
+    convidado_id = convidado.id
+
+    _login(client, "G-CAD-023")
+    resp = client.patch(f"/usuarios/{convidado_id}", json={"ativo": False}, headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    db.refresh(convidado)
+    assert convidado.ativo is False
+    assert convidado.convite_token is None
+    assert convidado.convite_expira_em is None
+
+    resp = client.post("/auth/ativar-conta", json={"token": "token-revogar-123", "nova_senha": "Senha-Nova-123!"},
+                       headers=_bootstrap_csrf_publico(client))
+    assert resp.status_code == 404
+
+
+def test_ativar_conta_zera_bloqueio_acumulado_antes_da_ativacao(client, db):
+    """Regressão: a conta convidada já existe ativa (com senha
+    inutilizável) desde a criação do convite, então um atacante pode
+    esgotar tentativas de login contra ela antes do dono ativar. A
+    ativação por token prova posse mais forte que a senha antiga e não
+    pode herdar esse bloqueio."""
+    from datetime import datetime, timedelta, timezone
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-024")
+    convidado = Usuario(matricula="PEND-L", nome="Pendente L", senha_hash=auth.hash_senha("x"),
+                        papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True,
+                        status_cadastro=StatusCadastro.APROVADO,
+                        convite_token="token-lockout-123",
+                        convite_expira_em=datetime.now(timezone.utc) + timedelta(hours=1),
+                        tentativas_falhas=5,
+                        bloqueado_ate=datetime.now(timezone.utc) + timedelta(minutes=15))
+    db.add(convidado)
+    db.flush()
+
+    resp = client.post("/auth/ativar-conta", json={"token": "token-lockout-123", "nova_senha": "Senha-Nova-123!"},
+                       headers=_bootstrap_csrf_publico(client))
+    assert resp.status_code == 200, resp.text
+
+    db.refresh(convidado)
+    assert convidado.bloqueado_ate is None
+    assert convidado.tentativas_falhas == 0
+
+
 # --- convite direto do gestor ---------------------------------------------------
 
 def test_analista_nao_pode_criar_convite(client, db):
@@ -403,7 +496,11 @@ def test_trocar_dispositivo_com_senha_errada_e_rejeitado(client, db):
     assert resp.json()["detail"] == "senha atual incorreta"
 
 
-def test_trocar_dispositivo_com_senha_correta_sobrescreve_segredo(client, db):
+def test_trocar_dispositivo_com_senha_correta_gera_segredo_pendente_sem_desativar(client, db):
+    """iniciar não sobrescreve o 2FA ativo — só cria um segredo em staging.
+    Abandonar o fluxo aqui não pode deixar a conta sem 2º fator (achado de
+    revisão: essa era exatamente a regressão que este teste antes fixava
+    como esperada, com `assert totp_ativado is False`)."""
     gestora, usuario = _gestora_com_usuario(db, matricula="G-CAD-021")
     segredo_antigo = pyotp.random_base32()
     usuario.totp_secret = segredo_antigo
@@ -416,8 +513,56 @@ def test_trocar_dispositivo_com_senha_correta_sobrescreve_segredo(client, db):
     assert resp.status_code == 200, resp.text
 
     db.refresh(usuario)
-    assert usuario.totp_secret != segredo_antigo
-    assert usuario.totp_ativado is False  # precisa confirmar de novo com o código do novo segredo
+    assert usuario.totp_secret == segredo_antigo
+    assert usuario.totp_ativado is True
+    assert usuario.totp_secret_pendente is not None
+    assert usuario.totp_secret_pendente != segredo_antigo
+
+
+def test_abandonar_troca_de_dispositivo_nao_desativa_2fa(client, db):
+    """Regressão: fechar a aba depois do QR (sem confirmar) não pode
+    deixar a conta logando só com senha."""
+    gestora, usuario = _gestora_com_usuario(db, matricula="G-CAD-021B")
+    segredo_antigo = pyotp.random_base32()
+    usuario.totp_secret = segredo_antigo
+    usuario.totp_ativado = True
+    db.flush()
+
+    _login_completo_2fa(client, "G-CAD-021B", segredo_antigo)
+    resp = client.post("/auth/2fa/iniciar", json={"senha_atual": "Senha-123!"},
+                       headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    resp = client.post("/auth/logout", headers=_csrf_headers(client))
+    resp = _login(client, "G-CAD-021B")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["requer_2fa"] is True
+
+    codigo_antigo = pyotp.TOTP(segredo_antigo).now()
+    resp = client.post("/auth/2fa/verificar", json={"codigo": codigo_antigo}, headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+
+def test_confirmar_troca_de_dispositivo_promove_segredo_pendente(client, db):
+    gestora, usuario = _gestora_com_usuario(db, matricula="G-CAD-021C")
+    segredo_antigo = pyotp.random_base32()
+    usuario.totp_secret = segredo_antigo
+    usuario.totp_ativado = True
+    db.flush()
+
+    _login_completo_2fa(client, "G-CAD-021C", segredo_antigo)
+    resp = client.post("/auth/2fa/iniciar", json={"senha_atual": "Senha-123!"},
+                       headers=_csrf_headers(client))
+    segredo_novo = pyotp.parse_uri(resp.json()["otpauth_uri"]).secret
+
+    codigo_novo = pyotp.TOTP(segredo_novo).now()
+    resp = client.post("/auth/2fa/confirmar", json={"codigo": codigo_novo}, headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    db.refresh(usuario)
+    assert usuario.totp_secret == segredo_novo
+    assert usuario.totp_secret_pendente is None
+    assert usuario.totp_ativado is True
 
 
 def test_trocar_dispositivo_sem_senha_e_rejeitado(client, db):
@@ -431,3 +576,22 @@ def test_trocar_dispositivo_sem_senha_e_rejeitado(client, db):
     resp = client.post("/auth/2fa/iniciar", headers=_csrf_headers(client))
     assert resp.status_code == 401
     assert resp.json()["detail"] == "senha atual incorreta"
+
+
+def test_sexta_chamada_a_iniciar_2fa_em_um_minuto_leva_429(client, db):
+    """Regressão: /auth/2fa/iniciar não tinha rate limit — um cookie de
+    sessão roubado permitia brute force ilimitado da senha via step-up."""
+    gestora, usuario = _gestora_com_usuario(db, matricula="G-CAD-025")
+    segredo = pyotp.random_base32()
+    usuario.totp_secret = segredo
+    usuario.totp_ativado = True
+    db.flush()
+
+    _login_completo_2fa(client, "G-CAD-025", segredo)
+    for _ in range(5):
+        resp = client.post("/auth/2fa/iniciar", json={"senha_atual": "senha-errada"},
+                           headers=_csrf_headers(client))
+        assert resp.status_code == 401
+    resp = client.post("/auth/2fa/iniciar", json={"senha_atual": "senha-errada"},
+                       headers=_csrf_headers(client))
+    assert resp.status_code == 429

@@ -77,6 +77,36 @@ MAX_TENTATIVAS_FALHAS = 5
 BLOQUEIO_MINUTOS = 15
 
 
+def verificar_senha_com_lockout(usuario: Usuario, senha: "str | None") -> bool:
+    """Confere a senha respeitando o mesmo lockout do login (MAX_TENTATIVAS_FALHAS
+    erros seguidos bloqueiam por BLOQUEIO_MINUTOS) — qualquer rota que
+    reverifica a senha de uma sessão já autenticada (step-up) deve usar
+    isso em vez de `verificar_senha` puro, senão vira um oráculo de senha
+    sem custo pra quem já tem o cookie de sessão (ver docs/SEGURANCA.md).
+
+    Muta `usuario.tentativas_falhas`/`usuario.bloqueado_ate` — quem chama
+    decide quando commitar (precisa commitar mesmo em falha, pra manter o
+    contador)."""
+    agora = datetime.now(timezone.utc)
+    bloqueado_ate = usuario.bloqueado_ate
+    if bloqueado_ate is not None and bloqueado_ate.tzinfo is None:
+        bloqueado_ate = bloqueado_ate.replace(tzinfo=timezone.utc)
+    if bloqueado_ate is not None and bloqueado_ate > agora:
+        # conta bloqueada — nem checa a senha, mas devolve o mesmo False genérico
+        return False
+
+    if not senha or not verificar_senha(senha, usuario.senha_hash):
+        usuario.tentativas_falhas += 1
+        if usuario.tentativas_falhas >= MAX_TENTATIVAS_FALHAS:
+            usuario.bloqueado_ate = agora + timedelta(minutes=BLOQUEIO_MINUTOS)
+            usuario.tentativas_falhas = 0
+        return False
+
+    usuario.tentativas_falhas = 0
+    usuario.bloqueado_ate = None
+    return True
+
+
 def autenticar(db: Session, matricula: str, senha: str) -> Usuario | None:
     """Retorna o usuário se matrícula+senha baterem e a conta estiver ativa;
     None em qualquer outro caso — nunca revelo qual dos dois está errado
@@ -92,23 +122,9 @@ def autenticar(db: Session, matricula: str, senha: str) -> Usuario | None:
     if usuario is None:
         return None
 
-    agora = datetime.now(timezone.utc)
-    bloqueado_ate = usuario.bloqueado_ate
-    if bloqueado_ate is not None and bloqueado_ate.tzinfo is None:
-        bloqueado_ate = bloqueado_ate.replace(tzinfo=timezone.utc)
-    if bloqueado_ate is not None and bloqueado_ate > agora:
-        # conta bloqueada — nem checa a senha, mas devolve o mesmo None genérico
+    if not verificar_senha_com_lockout(usuario, senha):
         return None
 
-    if not verificar_senha(senha, usuario.senha_hash):
-        usuario.tentativas_falhas += 1
-        if usuario.tentativas_falhas >= MAX_TENTATIVAS_FALHAS:
-            usuario.bloqueado_ate = agora + timedelta(minutes=BLOQUEIO_MINUTOS)
-            usuario.tentativas_falhas = 0
-        return None
-
-    usuario.tentativas_falhas = 0
-    usuario.bloqueado_ate = None
     return usuario
 
 

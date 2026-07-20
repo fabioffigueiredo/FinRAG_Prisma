@@ -102,6 +102,52 @@ def test_matricula_inexistente_nunca_bloqueia_nada(db):
         assert auth.autenticar(db, "NAO-EXISTE-LOCK", "qualquer") is None
 
 
+# --- lockout no step-up de senha (achado de revisão: /auth/2fa/iniciar) -----
+#
+# O step-up de troca de dispositivo de 2FA (POST /auth/2fa/iniciar com
+# totp_ativado=True) reusa a mesma `verificar_senha_com_lockout` do login —
+# sem isso, um cookie de sessão roubado virava um oráculo de senha sem
+# custo. Testado no nível de função pelo mesmo motivo do bloco acima: o
+# limiar de lockout e o de rate limit são os dois 5, então testar via HTTP
+# faria a 6ª chamada colidir com o 429 antes do 401 de bloqueio de verdade.
+
+def test_quinta_falha_no_step_up_bloqueia_a_conta(db):
+    usuario = _usuario_teste(db, matricula="LOCK-STEPUP-001")
+    for _ in range(4):
+        assert auth.verificar_senha_com_lockout(usuario, "senha-errada") is False
+    assert usuario.bloqueado_ate is None
+
+    assert auth.verificar_senha_com_lockout(usuario, "senha-errada") is False
+    assert usuario.bloqueado_ate is not None
+    assert usuario.bloqueado_ate > datetime.now(timezone.utc)
+
+
+def test_step_up_bloqueado_rejeita_ate_a_senha_correta(db):
+    usuario = _usuario_teste(db, matricula="LOCK-STEPUP-002")
+    for _ in range(5):
+        auth.verificar_senha_com_lockout(usuario, "senha-errada")
+    assert usuario.bloqueado_ate is not None
+
+    assert auth.verificar_senha_com_lockout(usuario, "Senha-123!") is False
+
+
+def test_step_up_sucesso_zera_contador_de_tentativas(db):
+    usuario = _usuario_teste(db, matricula="LOCK-STEPUP-003")
+    for _ in range(3):
+        auth.verificar_senha_com_lockout(usuario, "senha-errada")
+    assert usuario.tentativas_falhas == 3
+
+    assert auth.verificar_senha_com_lockout(usuario, "Senha-123!") is True
+    assert usuario.tentativas_falhas == 0
+    assert usuario.bloqueado_ate is None
+
+
+def test_step_up_sem_senha_conta_como_tentativa_falha(db):
+    usuario = _usuario_teste(db, matricula="LOCK-STEPUP-004")
+    assert auth.verificar_senha_com_lockout(usuario, None) is False
+    assert usuario.tentativas_falhas == 1
+
+
 # --- rate limiting (HTTP, via TestClient) -----------------------------------
 
 @pytest.fixture(scope="module")

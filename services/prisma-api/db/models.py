@@ -110,6 +110,11 @@ class Usuario(Base):
     # em repouso (ex.: cryptography.fernet + chave de secrets manager).
     totp_secret: Mapped["str | None"] = mapped_column(String(64), nullable=True)
     totp_ativado: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    # Segredo em staging durante troca de dispositivo self-service — só
+    # promovido a totp_secret/totp_ativado em /auth/2fa/confirmar, pra
+    # abandonar o fluxo (fechar a aba, não escanear o QR) nunca invalidar
+    # o 2FA que já estava ativo (ver docs/SEGURANCA.md).
+    totp_secret_pendente: Mapped["str | None"] = mapped_column(String(64), nullable=True)
 
     # Segurança de senha/sessão
     trocar_senha_no_proximo_login: Mapped[bool] = mapped_column(
