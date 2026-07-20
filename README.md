@@ -1,6 +1,6 @@
 # Prisma — Attribution Intelligence
 
-[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-194%20passing-5eead4)
+[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-226%20passing-5eead4)
 
 **A atribuição de performance, explicada.** O Prisma é uma camada cognitiva que
 transforma o resultado da atribuição de performance de fundos em **narrativa
@@ -22,8 +22,16 @@ comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse v
 - **Narrativa gerada** sobre números que já existem (baixo risco de alucinação);
 - **Q&A fundamentado** (RAG) com citações e score de recuperação;
 - **Radar de Mercado**: notícias classificadas por sentimento dão o "porquê";
+- **Pergunte ao Prisma conectado a Sinais de Mercado**: o copiloto conversacional
+  chama o mesmo modelo de regras auditável do Radar/Sinais (nível, probabilidade,
+  evidência por notícia, aviso legal CVM 20) — "qual a indicação de mercado para
+  esse fundo?" puxa o sinal de verdade, não uma narrativa genérica reaproveitada;
+  quando a resposta vem do motor Demo (sem LLM real conectado), um aviso visível
+  no chat e um registro na trilha de auditoria deixam isso explícito, nunca
+  silencioso;
 - **Guardrails**: prompt-injection bloqueado + escopo anti-recomendação
-  ("explica, não recomenda") — postura pensada para ambiente regulado;
+  ("explica, não recomenda", cobrindo fraseado coloquial — "vale a pena
+  resgatar?", "compensa sair?") — postura pensada para ambiente regulado;
 - **Auditoria**: cada consulta registrada (fontes, motor, latência, hash);
 - **Conta e acesso nos padrões de instituição financeira**: login com lockout
   e rate limiting, 2FA (TOTP) obrigatório para gestor/compliance — com troca
@@ -115,17 +123,20 @@ cd apps/web && ./node_modules/.bin/next dev -p 3100   # http://localhost:3100
 > `.venv/bin/python scripts/classificar_noticias.py --llm`
 
 **Testes:** `cd services/prisma-api && ../../.venv/bin/python -m pytest tests/ -v`
-(188 testes, 183 passam/5 skip, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
+(232 testes, 226 passam/6 skip, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
 `cd apps/web && ./node_modules/.bin/vitest run` (11 testes) ·
 `cd apps/web && ./node_modules/.bin/tsc --noEmit`
 
 ## Roteiro de demo (~5 min)
 1. **Cockpit** — números + Radar de Mercado + "Gerar ao vivo" (narrativa local).
 2. **Atribuição** — waterfall + drill por estratégia.
-3. **Copiloto** — pergunta fundamentada; "Por que o varejo pesou?" cita notícia.
-4. **Guardrails** — injeção bloqueada + "Qual fundo devo comprar?" recusado (escopo).
+3. **Copiloto** — pergunta fundamentada; "Por que o varejo pesou?" cita notícia;
+   botão "Sinais de Mercado" puxa o alerta probabilístico com aviso legal CVM 20.
+4. **Guardrails** — injeção bloqueada + "vale a pena resgatar agora?" recusado
+   (escopo, inclusive fraseado coloquial).
 5. **Multi-fundo** — trocar para Beta Ações no seletor; "Compare o Alfa e o Beta".
-6. **Auditoria** — mostrar a trilha das consultas feitas na própria demo.
+6. **Auditoria** — mostrar a trilha das consultas feitas na própria demo,
+   incluindo se a resposta veio do motor real ou do modo degradado.
 7. **Motor** — alternar Local ↔ Nuvem (privacidade vs latência).
 
 ## Deck
