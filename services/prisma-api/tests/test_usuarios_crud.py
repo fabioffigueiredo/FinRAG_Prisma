@@ -267,3 +267,27 @@ def test_trocar_senha_de_um_usuario_nao_afeta_outro(client, db):
     assert resp.status_code != 200, \
         "BUG CONFIRMADO: senha antiga de B ainda loga depois da troca"
 
+
+def test_revogar_sessao_e_trocar_senha_em_sequencia_nao_vaza_entre_usuarios(client, db):
+    """Cenário exato da narração original: revogar sessão de um usuário e,
+    em seguida, trocar sua senha, não pode afetar a senha do gestor logado
+    que está fazendo as duas operações."""
+    gestora, gestor = _gestora_com_usuario(db, matricula="GESTOR-N2", gestora_nome="Gestora N2")
+    usuario_a = Usuario(matricula="USER-A2", nome="Usuario A2", senha_hash=auth.hash_senha("senha-a2-original"),
+                       papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True)
+    db.add(usuario_a)
+    db.flush()
+    usuario_a_id = usuario_a.id
+
+    _login(client, "GESTOR-N2")
+    resp = client.post(f"/usuarios/{usuario_a_id}/revogar-sessao", headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+    resp = client.patch(f"/usuarios/{usuario_a_id}", json={"senha": "Senha-A2-Nova-123!"},
+                        headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    # a senha do PRÓPRIO gestor não pode ter mudado
+    db.refresh(gestor)
+    assert auth.verificar_senha("senha123", gestor.senha_hash), \
+        "BUG CONFIRMADO: editar outro usuário alterou a senha do gestor logado"
+
