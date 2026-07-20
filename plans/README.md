@@ -11,7 +11,8 @@ STOP conditions, e atualize sua linha ao terminar.
 | 001  | Arquitetura de memória de projeto persistente (decisões, tarefas, progresso) | P2 | M | — | DONE (commit `b464f72`, revisado 2026-07-18 — 1ª tentativa de dispatch foi pro worktree errado, corrigido; correção pós-review: CLAUDE.md tinha linguagem de auto-autorização pro deploy, revisada) |
 | 002  | Conectar sinais de mercado ao copiloto e tornar respostas degradadas visíveis/auditáveis | P0 | M | — | DONE (branch `advisor/002-copiloto-sinais-mercado`, worktree `~/Projetos/prisma-worktrees/plan-002`, commits `27b0332`..`e5cd494`, revisado 2026-07-20 — critérios re-executados pelo revisor, não só o relatório do executor: suíte completa 194 passed/6 skipped sem regressão, `tsc --noEmit` limpo, diff lido linha a linha, testes novos auditados e confirmados não-triviais. Não mergeado — decisão do usuário.) |
 | 003  | Provar ou refutar suspeita de contaminação de senha entre usuários + lacunas de UX em "Meu Perfil" | P0 (Passo 1) / P2 (Passos 2-3) | S | — | DONE (branch `advisor/003-isolamento-senha-usuarios`, worktree `~/Projetos/prisma-worktrees/plan-003`, commits `73dccee`..`e19ac4a`, revisado 2026-07-20 — as 3 suspeitas testadas com reprodução HTTP end-to-end real (não só hash direto): **REFUTADAS** as 3 — contaminação de senha entre usuários, vazamento via revogar-sessão+trocar-senha, e divergência de papel na criação. Passo 3 (badge de papel + link "Gerenciar usuários" em Meu Perfil) implementado, pequeno, `tsc`/`eslint` limpos. Suíte completa 186 passed/5 skipped sem regressão. Não mergeado — decisão do usuário.) |
-| 004  | Catálogo amplo de cenários de gestor como suíte de testes do copiloto | P1 | M | 002 | TODO — 002 (dependência) já está DONE, pode ser executado agora |
+| 004  | Catálogo amplo de cenários de gestor como suíte de testes do copiloto | P1 | M | 002 | BLOCKED (worktree `~/Projetos/prisma-worktrees/plan-004`, teste criado mas NÃO commitado — executor parou corretamente no STOP condition do próprio plano: `test_pedido_de_recomendacao_e_sempre_recusado` falhou em "vale a pena resgatar agora?", achado real em `escopo.py`, não regressão do executor. Bloqueado por 005.) |
+| 005  | Fechar lacunas de fraseado no guardrail de recomendação (escopo.py) | P0 | S | — | TODO |
 
 ## Dependency notes
 
@@ -22,6 +23,13 @@ paralelo, inclusive por executores/worktrees diferentes.
 004 depende de 002: a categoria B do catálogo (sinais de mercado) só faz
 sentido depois que `obter_sinais_mercado` existir em `agent.py`. Execute 002
 antes de 004; 003 é independente dos dois e pode rodar em qualquer ordem.
+
+004 está bloqueado por 005: a execução do 004 encontrou um achado real
+(guardrail de recomendação com lacunas de fraseado coloquial) e parou por
+instrução própria do plano em vez de afrouxar o teste. 005 corrige a causa
+raiz em `escopo.py`; depois disso, retome 004 a partir de onde parou (o
+teste `test_copiloto_cenarios_gestor.py` já criado na worktree do 004 deve
+passar sem alteração).
 
 ## Findings considered and rejected
 
