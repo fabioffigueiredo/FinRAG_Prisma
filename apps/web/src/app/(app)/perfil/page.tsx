@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import { Camera, Check, KeyRound, RefreshCcw, ShieldCheck, ShieldOff, X } from "lucide-react";
+import Link from "next/link";
+import { Camera, Check, KeyRound, RefreshCcw, ShieldCheck, ShieldOff, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { uploadAvatar, trocarSenha } from "@/lib/api";
 import { checklistSenha, senhaValida } from "@/lib/senha";
@@ -16,6 +17,12 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { cn, iniciaisNome } from "@/lib/utils";
 
 const BASE = process.env.NEXT_PUBLIC_PRISMA_API ?? "http://localhost:8000";
+
+const PAPEL_LABEL: Record<string, string> = {
+  analista: "Analista",
+  gestor: "Gestor",
+  compliance: "Compliance",
+};
 
 function SecaoAvatar() {
   const { usuario, refresh } = useSession();
@@ -214,10 +221,29 @@ export default function PerfilPage() {
   return (
     <PageStagger className="mx-auto max-w-2xl space-y-6">
       <Item>
-        <h1 className="font-display text-2xl font-semibold text-foreground">Meu Perfil</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {usuario ? `${usuario.nome} · ${usuario.matricula}` : "Carregando…"}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="font-display text-2xl font-semibold text-foreground">Meu Perfil</h1>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              {usuario ? (
+                <>
+                  {usuario.nome} · {usuario.matricula}
+                  <Badge variant={usuario.papel === "gestor" ? "default" : "secondary"}>
+                    {PAPEL_LABEL[usuario.papel] ?? usuario.papel}
+                  </Badge>
+                </>
+              ) : (
+                "Carregando…"
+              )}
+            </p>
+          </div>
+          {usuario && (usuario.papel === "gestor" || usuario.papel === "compliance") && (
+            <Button variant="outline" size="sm" render={<Link href="/admin/usuarios" />}>
+              <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Gerenciar usuários
+            </Button>
+          )}
+        </div>
       </Item>
 
       <SecaoAvatar />
