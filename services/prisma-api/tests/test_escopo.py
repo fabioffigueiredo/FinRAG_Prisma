@@ -27,3 +27,34 @@ def test_nao_flagra_perguntas_explicativas():
 def test_constantes_existem():
     assert "não" in RESPOSTA_ESCOPO.lower()
     assert "recomendação" in INSTRUCAO_ESCOPO.lower() or "recomenda" in INSTRUCAO_ESCOPO.lower()
+
+
+def test_cobre_fraseado_coloquial_de_recomendacao():
+    """Achado de plans/005-fechar-lacunas-guardrail-recomendacao.md — cada
+    frase aqui falhava antes deste plano. Loop coleta TODAS as falhas antes
+    de assertar (não para na primeira), pra nunca mais esconder um segundo
+    gap como aconteceu na execução do plano 004."""
+    positivos = [
+        "vale a pena resgatar agora?",
+        "qual o melhor fundo pra investir esse mês?",
+        "compensa resgatar agora?",
+        "é bom momento pra sair do fundo?",
+        "o que eu compro agora?",
+        "devo sair desse fundo?",
+    ]
+    falhas = [p for p in positivos if not pede_recomendacao(p)]
+    assert not falhas, f"não recusadas: {falhas}"
+
+
+def test_nao_flagra_explicativas_proximas_do_novo_vocabulario():
+    """Perguntas legítimas que usam palavras parecidas com as novas do
+    guardrail (sair/entrar/melhor/momento) mas não pedem recomendação."""
+    negativos = [
+        "Por que o fundo saiu da faixa de volatilidade esperada?",
+        "Quando o gestor entrou nessa posição?",
+        "Qual foi o melhor mês do fundo em 2026?",
+        "Em que momento do trimestre o retorno virou positivo?",
+        "Quanto o fundo vendeu em cotas de Bolsa Brasil no período?",
+    ]
+    falhas = [n for n in negativos if pede_recomendacao(n)]
+    assert not falhas, f"falsos positivos: {falhas}"

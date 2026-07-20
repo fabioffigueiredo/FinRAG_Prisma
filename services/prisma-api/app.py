@@ -901,17 +901,20 @@ def analisar_endpoint(req: AnalisarReq):
                 "backend": req.backend, "latency_ms": 0, "escopo": True}
 
     fundos = STATE.get("fundos") or {}
+    noticias = STATE.get("noticias") or []
     degradado = False
     try:
         cliente = get_backend(req.backend)
         if hasattr(cliente, "chat"):
             resultado = agente.analisar(pergunta=req.pergunta, fundo_ativo=req.fundo,
-                                        backend=cliente, fundos=fundos)
+                                        backend=cliente, fundos=fundos, noticias=noticias)
         else:
-            resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos, pergunta=req.pergunta)
+            resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos,
+                                             noticias=noticias, pergunta=req.pergunta)
             degradado = True
     except Exception:
-        resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos, pergunta=req.pergunta)
+        resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos,
+                                         noticias=noticias, pergunta=req.pergunta)
         degradado = True
 
     lat = int((time.perf_counter() - t0) * 1000)
@@ -920,7 +923,8 @@ def analisar_endpoint(req: AnalisarReq):
                     fontes=[t["tool"] for t in resultado.get("tool_trace", [])],
                     bloqueados=[], resposta=resultado["resposta"],
                     extra={"consulta_echo": resultado.get("consulta_echo"),
-                           "tool_trace": resultado.get("tool_trace")})
+                           "tool_trace": resultado.get("tool_trace"),
+                           "degradado": degradado})
     return {
         "resposta": resultado["resposta"],
         "consulta_echo": resultado.get("consulta_echo", {}),
