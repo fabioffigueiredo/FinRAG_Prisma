@@ -11,12 +11,17 @@ STOP conditions, e atualize sua linha ao terminar.
 | 001  | Arquitetura de memória de projeto persistente (decisões, tarefas, progresso) | P2 | M | — | DONE (commit `b464f72`, revisado 2026-07-18 — 1ª tentativa de dispatch foi pro worktree errado, corrigido; correção pós-review: CLAUDE.md tinha linguagem de auto-autorização pro deploy, revisada) |
 | 002  | Conectar sinais de mercado ao copiloto e tornar respostas degradadas visíveis/auditáveis | P0 | M | — | TODO |
 | 003  | Provar ou refutar suspeita de contaminação de senha entre usuários + lacunas de UX em "Meu Perfil" | P0 (Passo 1) / P2 (Passos 2-3) | S | — | TODO |
+| 004  | Catálogo amplo de cenários de gestor como suíte de testes do copiloto | P1 | M | 002 | TODO |
 
 ## Dependency notes
 
 Nenhuma entre 002 e 003 — auditam áreas diferentes do mesmo produto
 (copiloto conversacional vs. admin de usuários) e podem ser executados em
 paralelo, inclusive por executores/worktrees diferentes.
+
+004 depende de 002: a categoria B do catálogo (sinais de mercado) só faz
+sentido depois que `obter_sinais_mercado` existir em `agent.py`. Execute 002
+antes de 004; 003 é independente dos dois e pode rodar em qualquer ordem.
 
 ## Findings considered and rejected
 
