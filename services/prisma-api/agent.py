@@ -26,6 +26,13 @@ _ALIASES_DIMENSAO = {
     "renda fixa": "renda_fixa",
 }
 _ALIASES_FUNDO = {"alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12"}
+# Palavras genéricas demais para servir de "apelido" de um fundo no laço
+# primeira_palavra de _detectar_fundo_citado — "fundo"/"fundos" é a colisão
+# que motivou isto (fixtures de teste nomeiam fundos como "Fundo {codigo}",
+# então a palavra genérica "fundo" numa pergunta batia com qualquer fundo);
+# fic/fim/fia são sufixos comuns de estrutura de fundo brasileiro, igualmente
+# não-distintivos (ver plans/006-avisar-fundo-nao-reconhecido-no-mock.md).
+_PALAVRAS_GENERICAS_NOME = {"fundo", "fundos", "fic", "fim", "fia"}
 
 SISTEMA_AGENTE = (
     "Você é o Prisma, copiloto de atribuição de performance para gestores de fundos. "
@@ -224,8 +231,25 @@ def _detectar_fundo_citado(pergunta: str, fundos: dict) -> str | None:
             return cod
     for cod, f in fundos.items():
         primeira_palavra = f["fundo"]["nome"].split()[0].lower()
-        if len(primeira_palavra) > 3 and re.search(rf"\b{re.escape(primeira_palavra)}\b", texto):
+        if (len(primeira_palavra) > 3 and primeira_palavra not in _PALAVRAS_GENERICAS_NOME
+                and re.search(rf"\b{re.escape(primeira_palavra)}\b", texto)):
             return cod
+    return None
+
+
+_PADRAO_CODIGO_FUNDO = re.compile(r"\b[A-Za-zÀ-ú]{2,10}-\d{1,4}\b")
+
+
+def _fundo_nao_reconhecido_citado(pergunta: str, fundos: dict) -> str | None:
+    """Se a pergunta menciona algo no formato de código de fundo
+    (LETRAS-NÚMERO, ex. 'XYZ-99') que não bate com nenhum fundo conhecido,
+    devolve esse texto em maiúsculas — pra `analisar_mock` avisar o usuário
+    em vez de responder silenciosamente sobre outro fundo (ver
+    plans/006-avisar-fundo-nao-reconhecido-no-mock.md)."""
+    for m in _PADRAO_CODIGO_FUNDO.finditer(pergunta or ""):
+        candidato = m.group(0).upper()
+        if candidato not in fundos:
+            return candidato
     return None
 
 
@@ -525,6 +549,12 @@ def analisar_mock(*, fundo_ativo: str, fundos: dict, noticias: list[dict] | None
     de mercado')."""
     noticias = noticias or []
     fundo_citado = _detectar_fundo_citado(pergunta, fundos)
+    if not fundo_citado:
+        nao_reconhecido = _fundo_nao_reconhecido_citado(pergunta, fundos)
+        if nao_reconhecido:
+            return {"resposta": f"(Demonstração) Fundo '{nao_reconhecido}' não encontrado — "
+                                f"verifique o código e tente novamente.",
+                    "consulta_echo": {}, "blocos": [], "acoes": [], "avisos": [], "tool_trace": []}
     fundo_alvo = fundo_citado or fundo_ativo
     pergunta_low = (pergunta or "").lower()
 
