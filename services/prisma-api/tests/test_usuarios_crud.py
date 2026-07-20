@@ -212,3 +212,58 @@ def test_usuario_nao_pode_se_autodesativar(client, db):
     meu_id = next(u["id"] for u in resp.json()["usuarios"] if u["matricula"] == "GESTOR-M1")
     resp = client.patch(f"/usuarios/{meu_id}", json={"ativo": False}, headers=_csrf_headers(client))
     assert resp.status_code == 400
+
+
+# --- investigação plan 003: suspeita de contaminação de senha entre usuários -
+
+def test_trocar_senha_de_um_usuario_nao_afeta_outro(client, db):
+    """Regressão direta da suspeita levantada em teste manual (ver
+    plans/003-verificar-isolamento-senha-usuarios.md): trocar a senha do
+    usuário B não pode mudar a senha do usuário A, nem deixar a senha
+    antiga de B ainda válida."""
+    gestora, gestor = _gestora_com_usuario(db, matricula="GESTOR-N1", gestora_nome="Gestora N")
+    usuario_a = Usuario(matricula="USER-A1", nome="Usuario A", senha_hash=auth.hash_senha("senha-a-original"),
+                       papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True)
+    usuario_b = Usuario(matricula="USER-B1", nome="Usuario B", senha_hash=auth.hash_senha("senha-b-original"),
+                       papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True)
+    db.add_all([usuario_a, usuario_b])
+    db.flush()
+    usuario_b_id = usuario_b.id
+
+    _login(client, "GESTOR-N1")
+    resp = client.patch(f"/usuarios/{usuario_b_id}", json={"senha": "Senha-B-Nova-123!"},
+                        headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    db.refresh(usuario_a)
+    db.refresh(usuario_b)
+
+    # A não pode ter mudado
+    assert auth.verificar_senha("senha-a-original", usuario_a.senha_hash), \
+        "BUG CONFIRMADO: trocar a senha de B alterou a senha de A"
+
+    # B tem que estar com a senha NOVA (e a antiga tem que ter deixado de valer)
+    assert auth.verificar_senha("Senha-B-Nova-123!", usuario_b.senha_hash)
+    assert not auth.verificar_senha("senha-b-original", usuario_b.senha_hash)
+
+    # end-to-end via login de verdade, não só hash direto
+    client.cookies.clear()
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": "USER-A1", "senha": "senha-a-original"},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code == 200, \
+        f"BUG CONFIRMADO: senha original de A parou de funcionar após troca de senha de B: {resp.text}"
+
+    client.cookies.clear()
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": "USER-B1", "senha": "Senha-B-Nova-123!"},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code == 200, f"senha nova de B deveria logar: {resp.text}"
+
+    client.cookies.clear()
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": "USER-B1", "senha": "senha-b-original"},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code != 200, \
+        "BUG CONFIRMADO: senha antiga de B ainda loga depois da troca"
+
