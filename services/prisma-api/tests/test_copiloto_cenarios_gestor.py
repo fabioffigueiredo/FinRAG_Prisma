@@ -48,17 +48,40 @@ def test_paráfrases_de_sinal_de_mercado_todas_disparam_a_tool_de_sinais():
             f"pergunta '{p}' não pareceu disparar a tool de sinais: {out['resposta']!r}"
 
 
-# --- C. Benchmark composto — limitação conhecida, documentada --------------
+# --- C. Benchmark composto -------------------------------------------------
+#
+# Duas situações diferentes, propositalmente separadas:
+# 1) recalcular sob demanda um benchmark composto AD HOC pra um fundo que é
+#    benchmarkado contra um índice simples (ex.: "e se comparasse a GAMA-12
+#    com 30% CDI + 70% Ibovespa?") — isso segue sendo um limite conhecido,
+#    não implementado (mudança de arquitetura maior, fora de escopo aqui).
+# 2) um fundo cujo PRÓPRIO benchmark contratual já É um composto fixo
+#    (comum na prática — multimercados mandatados contra uma cesta) — isso
+#    agora É suportado: o fundo ETA-27 (data/seed/fundo_eta.json) declara
+#    benchmark = "70% CDI + 30% Ibovespa", com a série diária precomputada
+#    como blend real de CDI (série da ALFA-33) e Ibovespa (série da BETA-71).
 
-def test_benchmark_composto_nao_e_recalculado_apenas_avisa_divergencia():
-    """Não existe suporte a peso de benchmark composto hoje — este teste
-    documenta o comportamento ATUAL (avisa que o benchmark do fundo é outro),
-    não implementa o recálculo. Ver categoria C da spec
+def test_benchmark_composto_ad_hoc_nao_e_recalculado_apenas_avisa_divergencia():
+    """Situação 1 acima — este teste documenta o comportamento ATUAL (avisa
+    que o benchmark do fundo é outro), não implementa o recálculo sob
+    demanda. Ver categoria C da spec
     (docs/superpowers/specs/2026-07-20-copiloto-cenarios-gestor-design.md)."""
     fundos = {"GAMA-12": _fundo("GAMA-12", benchmark="CDI")}
     out = agent._tool_obter_atribuicao(fundos, {"fundo": "GAMA-12", "benchmark": "30% CDI 70% Ibovespa"})
     assert out["benchmark"] == "CDI"  # continua o benchmark fixo do fundo, não recalcula composição
     assert out["aviso"] is not None and "CDI" in out["aviso"]
+
+
+def test_fundo_com_benchmark_composto_proprio_e_reconhecido_e_nao_diverge():
+    """Situação 2 acima — fundo real do seed com benchmark composto nativo."""
+    import json
+    fundo_eta = json.load(open("../../data/seed/fundo_eta.json", encoding="utf-8"))
+    fundos = {"ETA-27": fundo_eta}
+    cod = agent._detectar_fundo_citado("qual o benchmark do fundo eta?", fundos)
+    assert cod == "ETA-27"
+    out = agent._tool_obter_atribuicao(fundos, {"fundo": "ETA-27"})
+    assert out["benchmark"] == "70% CDI + 30% Ibovespa"
+    assert out["aviso"] is None  # não pediu benchmark diferente, não diverge
 
 
 # --- D. Fundo inexistente ---------------------------------------------------

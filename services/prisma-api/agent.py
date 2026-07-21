@@ -25,7 +25,11 @@ _ALIASES_DIMENSAO = {
     "rv": "renda_variavel", "rf": "renda_fixa", "renda variável": "renda_variavel",
     "renda fixa": "renda_fixa",
 }
-_ALIASES_FUNDO = {"alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12"}
+_ALIASES_FUNDO = {"alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12", "eta": "ETA-27"}
+# "eta" tem só 3 letras — abaixo do limiar len>3 do heurístico primeira_palavra
+# de _detectar_fundo_citado, então precisa de alias explícito pra ser
+# reconhecido em texto livre (mesmo motivo por que alfa/beta/gama já estavam
+# aqui em vez de confiar só no heurístico).
 # Palavras genéricas demais para servir de "apelido" de um fundo no laço
 # primeira_palavra de _detectar_fundo_citado — "fundo"/"fundos" é a colisão
 # que motivou isto (fixtures de teste nomeiam fundos como "Fundo {codigo}",
