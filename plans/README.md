@@ -16,6 +16,7 @@ STOP conditions, e atualize sua linha ao terminar.
 | 006  | `analisar_mock` avisa quando pergunta cita fundo inexistente em vez de trocar de fundo silenciosamente | P2 | S | — | DONE (branch `advisor/006-avisar-fundo-nao-reconhecido`, worktree `~/Projetos/prisma-worktrees/plan-006`, commit `590f87a`, revisado 2026-07-20 — o plano original colidia com um bug pré-existente não previsto em `_detectar_fundo_citado` (heurístico "primeira palavra" tratava a palavra genérica "fundo" como apelido distintivo, por causa do padrão de nome do fixture de teste "Fundo {codigo}"); revisor autorizou extensão pontual de escopo — stoplist de palavras genéricas — pra fechar isso sem tocar na lógica de resolução por alias/nome. 211 passed/6 skipped sem regressão, sondagem adversarial própria do revisor com nomes de fundo reais (não-fixture) confirmou nenhuma regressão na resolução por nome. Mergeado em main (commit 2db54c5) e deployado em produção — wiki.ioi.ia.br/prisma, validado ao vivo em 2026-07-20.) |
 
 | 007  | Fechar a Categoria H do catálogo (dimensão/período sem dado) | P2 | S | — | DONE (branch `advisor/007-categoria-h-dimensao-sem-dado`, worktree `~/Projetos/prisma-worktrees/plan-007`, commit `3b7a18a`, revisado 2026-07-20 — diff idêntico ao plano, nenhum arquivo de produção tocado, 229 passed/6 skipped sem regressão (baseline 226). Mergeado em main; sem impacto funcional, não exigiu novo deploy.) |
+| 008  | Achados #5-16 da revisão de código de auth/cadastro/convite | P0/P1 | M | — | TODO |
 
 ## Dependency notes
 
@@ -66,3 +67,22 @@ passar sem alteração).
 - **Papel do usuário criado divergindo do pedido no formulário** (plano
   003, Passo 2): investigada, também refutada — `POST /usuarios` com
   `papel: "analista"` cria exatamente com esse papel.
+- **`PATCH /usuarios/{id}` não expor `status_cadastro`** (achado #7 da
+  revisão de auth/cadastro, ver plano 008): resolvido por design — os
+  endpoints de ação dedicada (`aprovar`/`rejeitar`/`reenviar-convite`) já
+  fazem a transição de forma validada; expor o campo num `PATCH` genérico
+  permitiria transições inválidas sem essa validação.
+- **`409` de `/auth/cadastro` permitir enumeração de matrícula** (achado
+  #8): decisão consciente de manter — o teste
+  `test_autocadastro_matricula_duplicada_retorna_409` já testa esse
+  contrato deliberadamente, matrícula de funcionário não é secreta no
+  mesmo nível de e-mail/senha, e a rota já tem rate limit. Ver
+  justificativa completa em `plans/008-*.md`.
+
+## Fora do escopo de `/improve` — decisão de negócio pendente
+
+- **`matricula` é `unique` globalmente, não por `gestora_id`** (achado
+  #15 da revisão de auth/cadastro): pode ser intencional (matrícula como
+  identificador nacional único) ou um bug de modelo (deveria ser único
+  só dentro da mesma gestora/tenant). Muda schema + migration nova —
+  perguntar ao usuário antes de decidir, não é uma correção óbvia.
