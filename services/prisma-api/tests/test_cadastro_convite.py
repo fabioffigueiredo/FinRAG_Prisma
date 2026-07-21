@@ -725,3 +725,73 @@ def test_confirmar_2fa_apos_muitas_chamadas_leva_429(client, db):
     resp = client.post("/auth/2fa/confirmar", json={"codigo": "000000"},
                        headers=_csrf_headers(client))
     assert resp.status_code == 429
+
+
+# --- plano 009 — achado #15: matrícula única por gestora, não globalmente ----
+
+def test_mesma_matricula_em_duas_gestoras_cada_uma_loga_com_a_propria_senha(client, db):
+    """Prova de verdade da resolução da ambiguidade: duas gestoras
+    diferentes têm cada uma um usuário de matrícula "COLIDE-01" com senhas
+    diferentes — gestora_id no login desambigua qual delas."""
+    gestora_a = Gestora(nome="Gestora Colisão A")
+    gestora_b = Gestora(nome="Gestora Colisão B")
+    db.add_all([gestora_a, gestora_b])
+    db.flush()
+    usuario_a = Usuario(matricula="COLIDE-01", nome="Fulano A", senha_hash=auth.hash_senha("SenhaA-123!"),
+                        papel=Papel.ANALISTA, gestora_id=gestora_a.id, ativo=True)
+    usuario_b = Usuario(matricula="COLIDE-01", nome="Fulano B", senha_hash=auth.hash_senha("SenhaB-123!"),
+                        papel=Papel.ANALISTA, gestora_id=gestora_b.id, ativo=True)
+    db.add_all([usuario_a, usuario_b])
+    db.flush()
+
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={
+        "gestora_id": gestora_a.id, "matricula": "COLIDE-01", "senha": "SenhaA-123!",
+    }, headers={"x-csrf-token": csrf})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["nome"] == "Fulano A"
+
+    client.post("/auth/logout", headers={"x-csrf-token": csrf})
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={
+        "gestora_id": gestora_a.id, "matricula": "COLIDE-01", "senha": "SenhaB-123!",
+    }, headers={"x-csrf-token": csrf})
+    assert resp.status_code == 401, "senha da gestora B não pode logar na gestora A"
+
+    resp = client.post("/auth/login", json={
+        "gestora_id": gestora_b.id, "matricula": "COLIDE-01", "senha": "SenhaB-123!",
+    }, headers={"x-csrf-token": csrf})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["nome"] == "Fulano B"
+
+
+def test_login_sem_gestora_id_com_matricula_ambigua_e_recusado_sem_erro_500(client, db):
+    """Sem gestora_id (chamador antigo), se a matrícula existir em mais de
+    uma gestora o login é recusado (mensagem genérica), nunca uma exceção
+    ou o usuário errado."""
+    gestora_a = Gestora(nome="Gestora Ambígua A")
+    gestora_b = Gestora(nome="Gestora Ambígua B")
+    db.add_all([gestora_a, gestora_b])
+    db.flush()
+    db.add_all([
+        Usuario(matricula="AMBIGUO-01", nome="X", senha_hash=auth.hash_senha("Senha-123!"),
+               papel=Papel.ANALISTA, gestora_id=gestora_a.id, ativo=True),
+        Usuario(matricula="AMBIGUO-01", nome="Y", senha_hash=auth.hash_senha("Senha-123!"),
+               papel=Papel.ANALISTA, gestora_id=gestora_b.id, ativo=True),
+    ])
+    db.flush()
+
+    csrf = client.get("/auth/csrf").json()["csrf_token"]
+    resp = client.post("/auth/login", json={"matricula": "AMBIGUO-01", "senha": "Senha-123!"},
+                       headers={"x-csrf-token": csrf})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "matrícula ou senha inválidas"
+
+
+def test_login_sem_gestora_id_com_matricula_unica_continua_funcionando(client, db):
+    """Compatibilidade: chamador antigo sem gestora_id continua logando
+    normalmente quando não há ambiguidade (caso comum, uma matrícula só
+    existe numa gestora)."""
+    _gestora_com_usuario(db, matricula="G-CAD-033")
+    resp = _login(client, "G-CAD-033")
+    assert resp.status_code == 200, resp.text
