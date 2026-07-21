@@ -41,6 +41,7 @@ def test_cobre_fraseado_coloquial_de_recomendacao():
         "é bom momento pra sair do fundo?",
         "o que eu compro agora?",
         "devo sair desse fundo?",
+        "devo aportar mais agora?",
     ]
     falhas = [p for p in positivos if not pede_recomendacao(p)]
     assert not falhas, f"não recusadas: {falhas}"
