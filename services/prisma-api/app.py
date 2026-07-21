@@ -191,6 +191,7 @@ class IngestReq(BaseModel):
 class LoginReq(BaseModel):
     matricula: str
     senha: str
+    gestora_id: "int | None" = None
 
 
 class LoginResp(BaseModel):
@@ -225,12 +226,16 @@ def _login_com_rate_limit(request: Request, req: LoginReq, response: Response, d
     from sqlalchemy import select as _select
 
     from db.models import Usuario as _Usuario
-    usuario = auth.autenticar(db, req.matricula, req.senha)
+    usuario = auth.autenticar(db, req.matricula, req.senha, gestora_id=req.gestora_id)
     # Sempre commita — mesmo em falha — pra persistir o contador de
     # tentativas/bloqueio que `autenticar()` só marcou no objeto, sem commitar.
     db.commit()
     if usuario is None:
-        alvo = db.scalar(_select(_Usuario).where(_Usuario.matricula == req.matricula))
+        filtros_alvo = [_Usuario.matricula == req.matricula]
+        if req.gestora_id is not None:
+            filtros_alvo.append(_Usuario.gestora_id == req.gestora_id)
+        candidatos_alvo = db.scalars(_select(_Usuario).where(*filtros_alvo)).all()
+        alvo = candidatos_alvo[0] if len(candidatos_alvo) == 1 else None
         bloqueado = alvo is not None and alvo.bloqueado_ate is not None
         audit.registrar_evento(
             rota="/auth/login", ator_matricula=req.matricula,
@@ -533,7 +538,12 @@ def _login_microsoft_demo_com_rate_limit(request: Request, response: Response, d
     from db.models import Usuario as _Usuario
     from db.repo import criar_usuario as _criar_usuario
 
-    usuario = db.scalar(_select(_Usuario).where(_Usuario.matricula == PRISMA_DEMO_MATRICULA))
+    # .scalars().first() em vez de .scalar(): matrícula não é mais única
+    # globalmente (achado #15) — esta conta demo fixa não pede gestora
+    # (propositalmente, é um atalho de 1 clique), então defende contra
+    # `MultipleResultsFound` se um dia existir mais de uma linha com essa
+    # matrícula em gestoras diferentes.
+    usuario = db.scalars(_select(_Usuario).where(_Usuario.matricula == PRISMA_DEMO_MATRICULA)).first()
     if usuario is None:
         gestora = db.scalar(_select(_Gestora).order_by(_Gestora.id).limit(1))
         if gestora is None:

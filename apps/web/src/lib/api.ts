@@ -251,14 +251,14 @@ export async function getCsrf(): Promise<string | null> {
   }
 }
 
-export async function login(matricula: string, senha: string): Promise<LoginResultado> {
+export async function login(gestoraId: number, matricula: string, senha: string): Promise<LoginResultado> {
   const csrf = getCsrfToken();
   try {
     const res = await fetch(`${BASE}/auth/login`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json", ...(csrf ? { "X-CSRF-Token": csrf } : {}) },
-      body: JSON.stringify({ matricula, senha }),
+      body: JSON.stringify({ gestora_id: gestoraId, matricula, senha }),
     });
     const corpo = await res.json().catch(() => ({}));
     if (!res.ok) {
