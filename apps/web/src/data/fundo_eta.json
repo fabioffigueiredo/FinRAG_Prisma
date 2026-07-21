@@ -1,0 +1,424 @@
+{
+  "fundo": {
+    "nome": "Eta Multimercado Blend FIC FIM",
+    "codigo": "ETA-27",
+    "cnpj": "00.000.000/0001-00 (fictício)",
+    "benchmark": "70% CDI + 30% Ibovespa",
+    "periodo": "2º trimestre 2026 (abr–jun)",
+    "classe": "Multimercado Macro"
+  },
+  "resumo": {
+    "retorno_cota": 5.28,
+    "retorno_bench": 3.91,
+    "excesso_pp": 1.37,
+    "pct_cdi": 170.3,
+    "beta": 0.42,
+    "alpha_pp": 1.37,
+    "vol_anual": 6.1,
+    "patrimonio_mm": 512.3,
+    "num_cotistas": 1840
+  },
+  "estrategias": [
+    {
+      "nome": "Bolsa Brasil",
+      "contribuicao_pp": 2.1,
+      "peso_medio": 25.0,
+      "cor": "green"
+    },
+    {
+      "nome": "Juros Brasil",
+      "contribuicao_pp": 1.55,
+      "peso_medio": 30.0,
+      "cor": "blue"
+    },
+    {
+      "nome": "Crédito Privado",
+      "contribuicao_pp": 0.85,
+      "peso_medio": 20.0,
+      "cor": "gold"
+    },
+    {
+      "nome": "Caixa e Over",
+      "contribuicao_pp": 0.48,
+      "peso_medio": 15.0,
+      "cor": "neutral"
+    },
+    {
+      "nome": "Câmbio (USD)",
+      "contribuicao_pp": 0.3,
+      "peso_medio": 10.0,
+      "cor": "violet"
+    }
+  ],
+  "ativos": [
+    {
+      "estrategia": "Bolsa Brasil",
+      "ativo": "Setor Financeiro",
+      "contribuicao_pp": 1.1,
+      "peso_medio": 12.0
+    },
+    {
+      "estrategia": "Bolsa Brasil",
+      "ativo": "Setor Commodities",
+      "contribuicao_pp": 1.0,
+      "peso_medio": 13.0
+    },
+    {
+      "estrategia": "Juros Brasil",
+      "ativo": "NTN-B 2035",
+      "contribuicao_pp": 0.9,
+      "peso_medio": 17.0
+    },
+    {
+      "estrategia": "Juros Brasil",
+      "ativo": "LTN 2028",
+      "contribuicao_pp": 0.65,
+      "peso_medio": 13.0
+    },
+    {
+      "estrategia": "Crédito Privado",
+      "ativo": "Debênture Infra Saneamento 2030",
+      "contribuicao_pp": 0.5,
+      "peso_medio": 12.0
+    },
+    {
+      "estrategia": "Crédito Privado",
+      "ativo": "CDB Banco Médio 2028",
+      "contribuicao_pp": 0.35,
+      "peso_medio": 8.0
+    },
+    {
+      "estrategia": "Câmbio (USD)",
+      "ativo": "USD/BRL a termo",
+      "contribuicao_pp": 0.3,
+      "peso_medio": 10.0
+    }
+  ],
+  "fics": [],
+  "serie_diaria": [
+    {
+      "data": "2026-04-01",
+      "cota": 0.0,
+      "bench": 0.0
+    },
+    {
+      "data": "2026-04-02",
+      "cota": 0.07,
+      "bench": -0.02
+    },
+    {
+      "data": "2026-04-03",
+      "cota": 0.12,
+      "bench": 0.06
+    },
+    {
+      "data": "2026-04-06",
+      "cota": 0.23,
+      "bench": 0.2
+    },
+    {
+      "data": "2026-04-07",
+      "cota": 0.27,
+      "bench": 0.24
+    },
+    {
+      "data": "2026-04-08",
+      "cota": 0.36,
+      "bench": 0.31
+    },
+    {
+      "data": "2026-04-09",
+      "cota": 0.44,
+      "bench": 0.36
+    },
+    {
+      "data": "2026-04-10",
+      "cota": 0.48,
+      "bench": 0.46
+    },
+    {
+      "data": "2026-04-13",
+      "cota": 0.57,
+      "bench": 0.56
+    },
+    {
+      "data": "2026-04-14",
+      "cota": 0.61,
+      "bench": 0.63
+    },
+    {
+      "data": "2026-04-15",
+      "cota": 0.69,
+      "bench": 0.77
+    },
+    {
+      "data": "2026-04-16",
+      "cota": 0.73,
+      "bench": 0.87
+    },
+    {
+      "data": "2026-04-17",
+      "cota": 0.77,
+      "bench": 0.91
+    },
+    {
+      "data": "2026-04-20",
+      "cota": 0.85,
+      "bench": 0.95
+    },
+    {
+      "data": "2026-04-21",
+      "cota": 0.98,
+      "bench": 1.04
+    },
+    {
+      "data": "2026-04-22",
+      "cota": 1.03,
+      "bench": 1.14
+    },
+    {
+      "data": "2026-04-23",
+      "cota": 1.09,
+      "bench": 1.14
+    },
+    {
+      "data": "2026-04-24",
+      "cota": 1.19,
+      "bench": 1.27
+    },
+    {
+      "data": "2026-04-27",
+      "cota": 1.33,
+      "bench": 1.33
+    },
+    {
+      "data": "2026-04-28",
+      "cota": 1.43,
+      "bench": 1.44
+    },
+    {
+      "data": "2026-04-29",
+      "cota": 1.51,
+      "bench": 1.42
+    },
+    {
+      "data": "2026-04-30",
+      "cota": 1.65,
+      "bench": 1.45
+    },
+    {
+      "data": "2026-05-01",
+      "cota": 1.69,
+      "bench": 1.42
+    },
+    {
+      "data": "2026-05-04",
+      "cota": 1.82,
+      "bench": 1.48
+    },
+    {
+      "data": "2026-05-05",
+      "cota": 1.89,
+      "bench": 1.5
+    },
+    {
+      "data": "2026-05-06",
+      "cota": 1.94,
+      "bench": 1.53
+    },
+    {
+      "data": "2026-05-07",
+      "cota": 1.99,
+      "bench": 1.54
+    },
+    {
+      "data": "2026-05-08",
+      "cota": 2.06,
+      "bench": 1.67
+    },
+    {
+      "data": "2026-05-11",
+      "cota": 2.18,
+      "bench": 1.74
+    },
+    {
+      "data": "2026-05-12",
+      "cota": 2.23,
+      "bench": 1.77
+    },
+    {
+      "data": "2026-05-13",
+      "cota": 2.33,
+      "bench": 1.84
+    },
+    {
+      "data": "2026-05-14",
+      "cota": 2.44,
+      "bench": 1.85
+    },
+    {
+      "data": "2026-05-15",
+      "cota": 2.52,
+      "bench": 1.99
+    },
+    {
+      "data": "2026-05-18",
+      "cota": 2.62,
+      "bench": 2.13
+    },
+    {
+      "data": "2026-05-19",
+      "cota": 2.66,
+      "bench": 2.21
+    },
+    {
+      "data": "2026-05-20",
+      "cota": 2.7,
+      "bench": 2.2
+    },
+    {
+      "data": "2026-05-21",
+      "cota": 2.76,
+      "bench": 2.35
+    },
+    {
+      "data": "2026-05-22",
+      "cota": 2.87,
+      "bench": 2.37
+    },
+    {
+      "data": "2026-05-25",
+      "cota": 2.95,
+      "bench": 2.36
+    },
+    {
+      "data": "2026-05-26",
+      "cota": 3.02,
+      "bench": 2.41
+    },
+    {
+      "data": "2026-05-27",
+      "cota": 3.12,
+      "bench": 2.44
+    },
+    {
+      "data": "2026-05-28",
+      "cota": 3.2,
+      "bench": 2.57
+    },
+    {
+      "data": "2026-05-29",
+      "cota": 3.27,
+      "bench": 2.57
+    },
+    {
+      "data": "2026-06-01",
+      "cota": 3.39,
+      "bench": 2.56
+    },
+    {
+      "data": "2026-06-02",
+      "cota": 3.5,
+      "bench": 2.61
+    },
+    {
+      "data": "2026-06-03",
+      "cota": 3.56,
+      "bench": 2.59
+    },
+    {
+      "data": "2026-06-04",
+      "cota": 3.66,
+      "bench": 2.69
+    },
+    {
+      "data": "2026-06-05",
+      "cota": 3.75,
+      "bench": 2.74
+    },
+    {
+      "data": "2026-06-08",
+      "cota": 3.88,
+      "bench": 2.88
+    },
+    {
+      "data": "2026-06-09",
+      "cota": 4.0,
+      "bench": 3.03
+    },
+    {
+      "data": "2026-06-10",
+      "cota": 4.07,
+      "bench": 3.03
+    },
+    {
+      "data": "2026-06-11",
+      "cota": 4.21,
+      "bench": 3.15
+    },
+    {
+      "data": "2026-06-12",
+      "cota": 4.26,
+      "bench": 3.21
+    },
+    {
+      "data": "2026-06-15",
+      "cota": 4.34,
+      "bench": 3.34
+    },
+    {
+      "data": "2026-06-16",
+      "cota": 4.46,
+      "bench": 3.33
+    },
+    {
+      "data": "2026-06-17",
+      "cota": 4.51,
+      "bench": 3.4
+    },
+    {
+      "data": "2026-06-18",
+      "cota": 4.6,
+      "bench": 3.55
+    },
+    {
+      "data": "2026-06-19",
+      "cota": 4.64,
+      "bench": 3.52
+    },
+    {
+      "data": "2026-06-22",
+      "cota": 4.75,
+      "bench": 3.55
+    },
+    {
+      "data": "2026-06-23",
+      "cota": 4.87,
+      "bench": 3.58
+    },
+    {
+      "data": "2026-06-24",
+      "cota": 4.97,
+      "bench": 3.63
+    },
+    {
+      "data": "2026-06-25",
+      "cota": 5.1,
+      "bench": 3.78
+    },
+    {
+      "data": "2026-06-26",
+      "cota": 5.17,
+      "bench": 3.78
+    },
+    {
+      "data": "2026-06-29",
+      "cota": 5.28,
+      "bench": 3.91
+    }
+  ],
+  "benchmark_pesos": {
+    "CDI": 0.7,
+    "IBOVESPA": 0.3
+  }
+}
