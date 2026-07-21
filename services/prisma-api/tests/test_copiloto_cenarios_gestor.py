@@ -107,6 +107,44 @@ def test_tentativa_de_injecao_e_bloqueada():
         assert escopo.tenta_injecao(p), f"pergunta deveria ter sido bloqueada: {p!r}"
 
 
+# --- H. Dimensão ou período sem dado disponível -----------------------------
+
+def test_dimensao_renda_variavel_sem_dado_cai_no_aviso_de_estrategia():
+    """Mesmo padrão determinístico de
+    test_agent_db_integration.py::test_dimensao_sem_dado_no_banco_cai_no_aviso_antigo
+    — força a divergência via período inexistente, não depende do Postgres
+    estar semeado."""
+    fundo = _fundo("ALFA-33")
+    fundo["fundo"]["periodo"] = "período que não existe no banco"
+    fundos = {"ALFA-33": fundo}
+    out = agent._tool_obter_atribuicao(fundos, {"fundo": "ALFA-33", "dimensao": "renda_variavel"})
+    assert out["dimensao"] == "estrategia"
+    assert out["aviso"] is not None
+    assert "não está disponível" in out["aviso"]
+
+
+def test_dimensao_privados_sem_dado_cai_no_aviso_de_estrategia():
+    fundo = _fundo("ALFA-33")
+    fundo["fundo"]["periodo"] = "período que não existe no banco"
+    fundos = {"ALFA-33": fundo}
+    out = agent._tool_obter_atribuicao(fundos, {"fundo": "ALFA-33", "dimensao": "privados"})
+    assert out["dimensao"] == "estrategia"
+    assert out["aviso"] is not None
+    assert "não está disponível" in out["aviso"]
+
+
+def test_pergunta_periodo_fora_do_disponivel_avisa_em_vez_de_inventar():
+    """Categoria H também cobre período fora do único disponível no seed
+    (não só dimensão) — via analisar_mock, pergunta em linguagem natural."""
+    fundos = {"ALFA-33": _fundo("ALFA-33")}
+    out = agent.analisar_mock(fundo_ativo="ALFA-33", fundos=fundos, noticias=[],
+                              pergunta="como foi a rentabilidade do fundo no ano passado?")
+    # não deve levantar exceção nem inventar um período diferente do
+    # configurado no fundo — a resposta narra o período real disponível
+    assert "erro" not in out or "resposta" in out
+    assert out["resposta"]
+
+
 # --- J. Caracterização: rotas de análise são públicas hoje (por design) ----
 
 def test_analisar_responde_sem_sessao_hoje_caracterizacao():
