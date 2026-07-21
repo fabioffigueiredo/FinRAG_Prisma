@@ -25,28 +25,22 @@ def gerar_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def enviar_email_ativacao(destino: str, nome: str, link: str) -> bool:
+def _enviar(destino: str, assunto: str, corpo_texto: str, contexto: str) -> bool:
     """POST direto na API REST do SendGrid (sem SDK novo — `requests` já é
     dependência do projeto). Nunca lança: falha de e-mail não pode derrubar
     a rota que a chamou (mesma filosofia degrada-sem-cair de `audit.py`) —
-    quem chama sempre devolve o link na resposta como rede de segurança.
-    """
+    quem chama sempre devolve o link/segue o fluxo como rede de segurança.
+    `contexto` é só pra log (ex.: "ativação", "rejeição")."""
     api_key = os.environ.get("SENDGRID_API_KEY")
     remetente = os.environ.get("SENDGRID_FROM_EMAIL")
     if not api_key or not remetente:
-        _logger.warning("SENDGRID_API_KEY/SENDGRID_FROM_EMAIL não configurados — e-mail de ativação não enviado")
+        _logger.warning("SENDGRID_API_KEY/SENDGRID_FROM_EMAIL não configurados — e-mail de %s não enviado", contexto)
         return False
 
-    corpo_texto = (
-        f"Olá, {nome}.\n\n"
-        f"Sua conta no Prisma foi liberada. Para ativar, defina sua senha "
-        f"neste link (válido por {TOKEN_EXPIRA_HORAS}h):\n{link}\n\n"
-        f"Se você não esperava este e-mail, pode ignorá-lo."
-    )
     payload = {
         "personalizations": [{"to": [{"email": destino}]}],
         "from": {"email": remetente, "name": "Prisma"},
-        "subject": "Ative sua conta Prisma",
+        "subject": assunto,
         "content": [{"type": "text/plain", "value": corpo_texto}],
     }
     try:
@@ -57,9 +51,32 @@ def enviar_email_ativacao(destino: str, nome: str, link: str) -> bool:
             timeout=10,
         )
         if resp.status_code >= 300:
-            _logger.warning("SendGrid recusou o envio: status=%s", resp.status_code)
+            _logger.warning("SendGrid recusou o envio (%s): status=%s", contexto, resp.status_code)
             return False
         return True
     except requests.RequestException:
-        _logger.warning("falha de rede ao enviar e-mail de ativação", exc_info=True)
+        _logger.warning("falha de rede ao enviar e-mail de %s", contexto, exc_info=True)
         return False
+
+
+def enviar_email_ativacao(destino: str, nome: str, link: str) -> bool:
+    corpo_texto = (
+        f"Olá, {nome}.\n\n"
+        f"Sua conta no Prisma foi liberada. Para ativar, defina sua senha "
+        f"neste link (válido por {TOKEN_EXPIRA_HORAS}h):\n{link}\n\n"
+        f"Se você não esperava este e-mail, pode ignorá-lo."
+    )
+    return _enviar(destino, "Ative sua conta Prisma", corpo_texto, "ativação")
+
+
+def enviar_email_rejeicao(destino: str, nome: str) -> bool:
+    """Achado #13: rejeição de cadastro era silenciosa — candidato nunca era
+    notificado. Nunca revela o motivo da rejeição (decisão do gestor, não
+    exposta pela API) nem oferece link de reenvio automático (ver achado #6
+    — reabrir um cadastro rejeitado é ação do gestor, não self-service)."""
+    corpo_texto = (
+        f"Olá, {nome}.\n\n"
+        f"Seu pedido de cadastro no Prisma não foi aprovado neste momento. "
+        f"Se você acredita que isso é um engano, entre em contato com seu gestor."
+    )
+    return _enviar(destino, "Sobre seu cadastro no Prisma", corpo_texto, "rejeição")
