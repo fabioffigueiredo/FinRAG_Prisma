@@ -2,7 +2,22 @@
 
 Sistema visual do Prisma. Captura o estado atual (fonte da verdade em `src/app/globals.css`) e a linguagem de movimento introduzida no redesign.
 
-> **Nota de proveniência (2026-07-18):** este arquivo descrevia originalmente a identidade "Obsidian Terminal" (ink+ouro, dark forçado) — a paleta do POC inicial (commit `a071377`, 2026-07-02). O commit `d73f206` ("Redesign institucional", 2026-07-08) substituiu essa paleta pela institucional navy/teal abaixo, e passou a honrar `next-themes` de verdade (claro/escuro alternável, não mais dark forçado). As seções **Theme** e **Color** foram corrigidas nesta data para refletir o CSS real; o resto do arquivo (Typography/Motion/Components/Layout) já estava atualizado.
+> **Nota de proveniência (2026-07-18, atualizada 2026-07-20):** este arquivo
+> descrevia originalmente a paleta ink+ouro do POC inicial (commit `a071377`,
+> 2026-07-02, dark forçado). O commit `d73f206` ("Redesign institucional",
+> 2026-07-08) substituiu essa paleta pela institucional navy/teal abaixo, e
+> passou a honrar `next-themes` de verdade (claro/escuro alternável, não mais
+> dark forçado). As seções **Theme** e **Color** foram corrigidas nesta data
+> para refletir o CSS real; o resto do arquivo (Typography/Motion/Components/
+> Layout) já estava atualizado.
+>
+> **Decisão de produto (2026-07-20):** a paleta navy/teal institucional é
+> **definitiva** (não é um estado transitório do redesign). O nome
+> **"Obsidian Terminal" passa a nomear esta identidade** (navy/teal +
+> âmbar como acento vivo) — consistente com `DESIGN.md` (raiz) e
+> `apps/web/PRODUCT.md`, que já usavam o nome dessa forma. A paleta ink+ouro
+> original fica só como nota histórica (POC pré-08/07), sem reivindicar o
+> nome "Obsidian Terminal".
 
 ## Theme
 

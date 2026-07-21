@@ -2,7 +2,7 @@
 import re
 
 _PADROES = [
-    r"devo\s+(comprar|vender|investir|aplicar|resgatar|sair|entrar)",
+    r"devo\s+(comprar|vender|investir|aplicar|resgatar|sair|entrar|aportar)",
     r"recomend",
     r"previs[aã]o",
     r"vai\s+(subir|cair|render)",
