@@ -107,18 +107,30 @@ def verificar_senha_com_lockout(usuario: Usuario, senha: "str | None") -> bool:
     return True
 
 
-def autenticar(db: Session, matricula: str, senha: str) -> Usuario | None:
-    """Retorna o usuário se matrícula+senha baterem e a conta estiver ativa;
-    None em qualquer outro caso — nunca revelo qual dos dois está errado
-    (evita enumeração de matrícula válida), e conta bloqueada usa a MESMA
-    mensagem genérica (revelar o estado de bloqueio também é enumeração de
-    conta — ver docs/SEGURANCA.md).
+def autenticar(db: Session, matricula: str, senha: str, gestora_id: "int | None" = None) -> Usuario | None:
+    """Retorna o usuário se matrícula(+gestora)+senha baterem e a conta
+    estiver ativa; None em qualquer outro caso — nunca revelo qual está
+    errado (evita enumeração de matrícula válida), e conta bloqueada usa a
+    MESMA mensagem genérica (revelar o estado de bloqueio também é
+    enumeração de conta — ver docs/SEGURANCA.md).
+
+    Matrícula só é única DENTRO da gestora, não globalmente (achado #15 —
+    ver plans/009-*.md). `gestora_id` desambigua quando informado (a tela
+    de login sempre manda); se vier `None` (chamadores antigos, testes),
+    cai pro caminho por matrícula só — funciona sem ambiguidade enquanto
+    ninguém tiver a mesma matrícula em duas gestoras diferentes, e devolve
+    None (nunca uma exceção) se a matrícula existir em mais de uma.
 
     Não commita — quem chama decide quando persistir (a rota de login
     precisa commitar mesmo em falha, pra manter o contador)."""
-    usuario = db.scalar(
-        select(Usuario).where(Usuario.matricula == matricula, Usuario.ativo.is_(True))
-    )
+    filtros = [Usuario.matricula == matricula, Usuario.ativo.is_(True)]
+    if gestora_id is not None:
+        filtros.append(Usuario.gestora_id == gestora_id)
+        usuario = db.scalar(select(Usuario).where(*filtros))
+    else:
+        candidatos = db.scalars(select(Usuario).where(*filtros)).all()
+        usuario = candidatos[0] if len(candidatos) == 1 else None
+
     if usuario is None:
         return None
 
@@ -183,6 +195,7 @@ def criar_token_pre2fa(usuario: Usuario) -> str:
     agora = datetime.now(timezone.utc)
     payload = {
         "sub": usuario.matricula,
+        "gestora_id": usuario.gestora_id,
         "pre2fa": True,
         "iat": agora,
         "exp": agora + timedelta(minutes=PRE2FA_EXPIRA_MINUTOS),
@@ -218,7 +231,10 @@ def obter_usuario_pre2fa(request: Request, db: Session) -> Usuario:
     if not payload.get("pre2fa"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="sessão de 2FA pendente não encontrada — faça login novamente")
-    usuario = db.scalar(select(Usuario).where(Usuario.matricula == payload["sub"]))
+    usuario = db.scalar(select(Usuario).where(
+        Usuario.matricula == payload["sub"],
+        Usuario.gestora_id == payload.get("gestora_id"),
+    ))
     if usuario is None or not usuario.ativo:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="sessão de 2FA pendente não encontrada — faça login novamente")
@@ -258,7 +274,10 @@ def get_usuario_atual(
         token = credenciais.credentials
     payload = decodificar_token(token)
 
-    usuario = db.scalar(select(Usuario).where(Usuario.matricula == payload["sub"]))
+    usuario = db.scalar(select(Usuario).where(
+        Usuario.matricula == payload["sub"],
+        Usuario.gestora_id == payload.get("gestora_id"),
+    ))
     if usuario is None or not usuario.ativo:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="não autenticado — envie o cookie de sessão ou o header Authorization: Bearer <token>")

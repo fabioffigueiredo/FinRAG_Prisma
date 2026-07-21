@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { getCsrf, login, loginMicrosoftDemo, verificar2fa } from "@/lib/api";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getCsrf, listarGestorasPublico, login, loginMicrosoftDemo, verificar2fa, type GestoraPublica } from "@/lib/api";
 import { PageStagger, Item } from "@/components/app/reveal";
 
 type EtapaLogin = "credenciais" | "2fa";
@@ -122,6 +123,8 @@ function CredenciaisForm({
   onRequer2FA: () => void;
 }) {
   const router = useRouter();
+  const [gestoraId, setGestoraId] = useState("");
+  const [gestoras, setGestoras] = useState<GestoraPublica[]>([]);
   const [matricula, setMatricula] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
@@ -130,13 +133,14 @@ function CredenciaisForm({
 
   useEffect(() => {
     getCsrf();
+    listarGestorasPublico().then(({ gestoras }) => setGestoras(gestoras));
   }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setErro(null);
     setEnviando(true);
-    const resultado = await login(matricula, senha);
+    const resultado = await login(Number(gestoraId), matricula, senha);
     setEnviando(false);
     if (!resultado.ok) {
       setErro(resultado.erro);
@@ -171,6 +175,23 @@ function CredenciaisForm({
     <form onSubmit={onSubmit} noValidate>
       <FieldGroup>
         <Field data-invalid={erro ? true : undefined}>
+          <FieldLabel htmlFor="gestora">Gestora</FieldLabel>
+          <Select value={gestoraId} onValueChange={(v) => setGestoraId(v ?? "")}>
+            <SelectTrigger id="gestora" className="w-full">
+              <SelectValue placeholder="Selecione a gestora" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {gestoras.map((g) => (
+                  <SelectItem key={g.id} value={String(g.id)}>
+                    {g.nome}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field data-invalid={erro ? true : undefined}>
           <FieldLabel htmlFor="matricula">Matrícula</FieldLabel>
           <Input
             id="matricula"
@@ -198,7 +219,7 @@ function CredenciaisForm({
           type="submit"
           variant="warning"
           size="lg"
-          disabled={enviando || !matricula || !senha}
+          disabled={enviando || !gestoraId || !matricula || !senha}
           className="mt-1 w-full"
         >
           {enviando ? "Entrando…" : "Entrar"}
