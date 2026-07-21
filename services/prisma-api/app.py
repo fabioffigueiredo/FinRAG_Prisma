@@ -45,7 +45,7 @@ _load_env()
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -444,9 +444,20 @@ class Confirmar2FAReq(BaseModel):
 
 
 @app.post("/auth/2fa/confirmar", dependencies=[Depends(auth.verificar_csrf)])
-def confirmar_2fa(req: Confirmar2FAReq,
+def confirmar_2fa(request: Request, req: Confirmar2FAReq,
                   usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance")),
                   db=Depends(get_db)):
+    """Fininho, mesmo motivo das outras rotas com rate limit (ver skill
+    fastapi-slowapi-future-annotations)."""
+    return _confirmar_2fa_com_rate_limit(request, req, usuario, db)
+
+
+@limiter.limit("5/minute")
+def _confirmar_2fa_com_rate_limit(request: Request, req: Confirmar2FAReq,
+                                   usuario: auth.UsuarioAtual, db):
+    """Achado #16: TOTP de 6 dígitos é alvo de força bruta se não limitado —
+    a rota irmã (/auth/2fa/verificar) já reconhecia isso, esta não tinha o
+    mesmo limitador."""
     import pyotp
 
     from db.models import Usuario as _Usuario
@@ -578,10 +589,10 @@ def listar_gestoras_publico(db=Depends(get_db)):
 
 
 class CadastroReq(BaseModel):
-    matricula: str
-    nome: str
-    email: str
-    telefone: "str | None" = None
+    matricula: str = Field(max_length=20)
+    nome: str = Field(max_length=120)
+    email: EmailStr = Field(max_length=160)
+    telefone: "str | None" = Field(default=None, max_length=30)
     gestora_id: int
 
 
@@ -636,9 +647,13 @@ class ConviteValidoResp(BaseModel):
 
 
 @app.get("/auth/convite/{token}", response_model=ConviteValidoResp)
-def validar_convite_rota(token: str, db=Depends(get_db)):
+@limiter.limit("20/minute")
+def validar_convite_rota(request: Request, token: str, db=Depends(get_db)):
     """Pública de propósito (o usuário ainda não tem sessão) — só devolve o
-    mínimo pra saudação da tela (nome/matrícula), nunca papel/e-mail/etc."""
+    mínimo pra saudação da tela (nome/matrícula), nunca papel/e-mail/etc.
+    Rate limit (achado #10): as outras rotas públicas do fluxo de
+    cadastro/convite já tinham; esta não tinha, mesmo consumindo um token
+    (defesa em profundidade — o token já tem 256 bits de entropia)."""
     from datetime import timezone as _timezone
     from sqlalchemy import select as _select
 
@@ -1020,25 +1035,25 @@ class UsuarioResp(BaseModel):
 
 
 class CriarUsuarioReq(BaseModel):
-    matricula: str
-    nome: str
+    matricula: str = Field(max_length=20)
+    nome: str = Field(max_length=120)
     papel: str
     senha: str
     trocar_senha_no_proximo_login: bool = False
-    email: "str | None" = None
-    telefone: "str | None" = None
+    email: "EmailStr | None" = Field(default=None, max_length=160)
+    telefone: "str | None" = Field(default=None, max_length=30)
 
 
 class AtualizarUsuarioReq(BaseModel):
     """Update parcial — `matricula` e `gestora_id` de propósito não existem
     aqui: são imutáveis por essa rota (ver Stage 3 do plano)."""
-    nome: str | None = None
+    nome: str | None = Field(default=None, max_length=120)
     papel: str | None = None
     ativo: bool | None = None
     senha: str | None = None
     trocar_senha_no_proximo_login: bool | None = None
-    email: "str | None" = None
-    telefone: "str | None" = None
+    email: "EmailStr | None" = Field(default=None, max_length=160)
+    telefone: "str | None" = Field(default=None, max_length=30)
 
 
 def _usuario_resp(u) -> UsuarioResp:
@@ -1150,8 +1165,9 @@ def aprovar_cadastro_rota(usuario_id: int, req: AprovarReq = AprovarReq(),
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
     if alvo.gestora_id != usuario.gestora_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
-    if alvo.status_cadastro != _StatusCadastro.PENDENTE:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cadastro não está pendente")
+    if alvo.status_cadastro not in (_StatusCadastro.PENDENTE, _StatusCadastro.REJEITADO):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="cadastro precisa estar pendente ou rejeitado")
 
     if req.papel is not None:
         try:
@@ -1175,10 +1191,49 @@ def aprovar_cadastro_rota(usuario_id: int, req: AprovarReq = AprovarReq(),
     return AprovarResp(link_ativacao=link, email_enviado=email_enviado)
 
 
+@app.post("/usuarios/{usuario_id}/reenviar-convite", response_model=AprovarResp,
+          dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
+def reenviar_convite_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
+                          db=Depends(get_db)):
+    """Gera um novo token quando o anterior expirou (48h) e o usuário nunca
+    ativou a conta — mesmo efeito de `aprovar_cadastro_rota`, mas pra quem
+    já está `APROVADO` (não passa por Pendente de novo)."""
+    from datetime import timedelta, timezone as _timezone
+
+    import convite as _convite
+
+    from db.models import StatusCadastro as _StatusCadastro
+    from db.repo import buscar_usuario_por_id
+
+    alvo = buscar_usuario_por_id(db, usuario_id)
+    if alvo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
+    if alvo.gestora_id != usuario.gestora_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
+    if alvo.status_cadastro != _StatusCadastro.APROVADO:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cadastro não está aprovado")
+    if alvo.convite_token is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="conta já foi ativada")
+
+    token = _convite.gerar_token()
+    alvo.convite_token = token
+    alvo.convite_expira_em = datetime.now(_timezone.utc) + timedelta(hours=_convite.TOKEN_EXPIRA_HORAS)
+    db.commit()
+
+    link = _link_ativacao(token)
+    email_enviado = _convite.enviar_email_ativacao(alvo.email, alvo.nome, link) if alvo.email else False
+
+    audit.registrar_evento(rota="/usuarios/reenviar-convite", ator_matricula=usuario.matricula,
+                           descricao=f"convite reemitido: {alvo.matricula}")
+    return AprovarResp(link_ativacao=link, email_enviado=email_enviado)
+
+
 @app.post("/usuarios/{usuario_id}/rejeitar",
           dependencies=[Depends(auth.exigir_papel("gestor", "compliance")), Depends(auth.verificar_csrf)])
 def rejeitar_cadastro_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual),
                            db=Depends(get_db)):
+    import convite as _convite
+
     from db.models import StatusCadastro as _StatusCadastro
     from db.repo import buscar_usuario_por_id
 
@@ -1193,17 +1248,19 @@ def rejeitar_cadastro_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends
     alvo.status_cadastro = _StatusCadastro.REJEITADO
     alvo.ativo = False
     db.commit()
+    if alvo.email:
+        _convite.enviar_email_rejeicao(alvo.email, alvo.nome)
     audit.registrar_evento(rota="/usuarios/rejeitar", ator_matricula=usuario.matricula,
                            descricao=f"cadastro rejeitado: {alvo.matricula}")
     return {"ok": True}
 
 
 class CriarConviteReq(BaseModel):
-    matricula: str
-    nome: str
+    matricula: str = Field(max_length=20)
+    nome: str = Field(max_length=120)
     papel: str
-    email: str
-    telefone: "str | None" = None
+    email: EmailStr = Field(max_length=160)
+    telefone: "str | None" = Field(default=None, max_length=30)
 
 
 @app.post("/usuarios/convite", status_code=status.HTTP_201_CREATED, response_model=AprovarResp,

@@ -595,3 +595,133 @@ def test_sexta_chamada_a_iniciar_2fa_em_um_minuto_leva_429(client, db):
     resp = client.post("/auth/2fa/iniciar", json={"senha_atual": "senha-errada"},
                        headers=_csrf_headers(client))
     assert resp.status_code == 429
+
+
+# --- plano 008 — achados #5, #6, #9, #10, #11, #12(frontend), #13, #16 --------
+
+def test_aprovar_reabre_cadastro_rejeitado(client, db):
+    """Achado #6: um cadastro rejeitado ficava bloqueado pra sempre — agora
+    o gestor pode reverter a rejeição aprovando depois."""
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-026")
+    rejeitado = Usuario(matricula="PEND-H", nome="Pendente H", senha_hash=auth.hash_senha("x"),
+                        papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=False,
+                        status_cadastro=StatusCadastro.REJEITADO)
+    db.add(rejeitado)
+    db.flush()
+
+    _login(client, "G-CAD-026")
+    resp = client.post(f"/usuarios/{rejeitado.id}/aprovar", headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+    db.refresh(rejeitado)
+    assert rejeitado.status_cadastro == StatusCadastro.APROVADO
+    assert rejeitado.ativo is True
+
+
+def test_reenviar_convite_gera_novo_token(client, db):
+    """Achado #5: convite expirado não tinha como ser reemitido."""
+    from datetime import datetime, timedelta, timezone
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-027")
+    aprovado = Usuario(matricula="PEND-I", nome="Pendente I", senha_hash=auth.hash_senha("x"),
+                       papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True,
+                       status_cadastro=StatusCadastro.APROVADO,
+                       convite_token="token-antigo-123",
+                       convite_expira_em=datetime.now(timezone.utc) - timedelta(hours=1))
+    db.add(aprovado)
+    db.flush()
+
+    _login(client, "G-CAD-027")
+    resp = client.post(f"/usuarios/{aprovado.id}/reenviar-convite", headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+    db.refresh(aprovado)
+    assert aprovado.convite_token is not None
+    assert aprovado.convite_token != "token-antigo-123"
+    assert aprovado.convite_expira_em > datetime.now(timezone.utc)
+
+
+def test_reenviar_convite_de_conta_ja_ativada_retorna_400(client, db):
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-028")
+    ativado = Usuario(matricula="PEND-J", nome="Pendente J", senha_hash=auth.hash_senha("x"),
+                      papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=True,
+                      status_cadastro=StatusCadastro.APROVADO,
+                      convite_token=None, convite_expira_em=None)
+    db.add(ativado)
+    db.flush()
+
+    _login(client, "G-CAD-028")
+    resp = client.post(f"/usuarios/{ativado.id}/reenviar-convite", headers=_csrf_headers(client))
+    assert resp.status_code == 400
+
+
+def test_vigesima_primeira_chamada_a_validar_convite_em_um_minuto_leva_429(client, db):
+    """Achado #10: GET /auth/convite/{token} não tinha rate limit, ao
+    contrário das outras rotas públicas do fluxo de cadastro/convite."""
+    for _ in range(20):
+        resp = client.get("/auth/convite/token-que-nao-existe")
+        assert resp.status_code == 404
+    resp = client.get("/auth/convite/token-que-nao-existe")
+    assert resp.status_code == 429
+
+
+def test_cadastro_com_nome_muito_longo_retorna_422_nao_500(client, db):
+    """Achado #11: sem max_length, um nome maior que a coluna Postgres
+    (String(120)) gerava DataError não tratado -> 500, não 422."""
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-029")
+    resp = client.post("/auth/cadastro", json={
+        "matricula": "NOVO-CAD-29", "nome": "N" * 200, "email": "a@example.com",
+        "gestora_id": gestora.id,
+    }, headers=_bootstrap_csrf_publico(client))
+    assert resp.status_code == 422
+
+
+def test_cadastro_com_email_invalido_retorna_422(client, db):
+    """Achado #14: email era `str` solto, sem EmailStr."""
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-030")
+    resp = client.post("/auth/cadastro", json={
+        "matricula": "NOVO-CAD-30", "nome": "Fulano", "email": "não-é-email",
+        "gestora_id": gestora.id,
+    }, headers=_bootstrap_csrf_publico(client))
+    assert resp.status_code == 422
+
+
+def test_rejeitar_cadastro_envia_email_de_notificacao(client, db, monkeypatch):
+    """Achado #13: rejeição era silenciosa — candidato nunca era
+    notificado."""
+    chamadas = []
+    monkeypatch.setattr("convite.enviar_email_rejeicao",
+                        lambda destino, nome: chamadas.append((destino, nome)) or True)
+
+    gestora, _ = _gestora_com_usuario(db, matricula="G-CAD-031")
+    pendente = Usuario(matricula="PEND-K", nome="Pendente K", senha_hash=auth.hash_senha("x"),
+                       papel=Papel.ANALISTA, gestora_id=gestora.id, ativo=False,
+                       email="pendente-k@example.com",
+                       status_cadastro=StatusCadastro.PENDENTE)
+    db.add(pendente)
+    db.flush()
+
+    _login(client, "G-CAD-031")
+    resp = client.post(f"/usuarios/{pendente.id}/rejeitar", headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+    assert chamadas == [("pendente-k@example.com", "Pendente K")]
+
+
+def test_confirmar_2fa_apos_muitas_chamadas_leva_429(client, db):
+    """Achado #16: /auth/2fa/confirmar não tinha rate limit, ao contrário
+    da rota irmã /auth/2fa/verificar."""
+    gestora, usuario = _gestora_com_usuario(db, matricula="G-CAD-032")
+    segredo = pyotp.random_base32()
+    usuario.totp_secret = segredo
+    usuario.totp_ativado = True
+    db.flush()
+
+    _login_completo_2fa(client, "G-CAD-032", segredo)
+    resp = client.post("/auth/2fa/iniciar", json={"senha_atual": "Senha-123!"},
+                       headers=_csrf_headers(client))
+    assert resp.status_code == 200, resp.text
+
+    for _ in range(5):
+        resp = client.post("/auth/2fa/confirmar", json={"codigo": "000000"},
+                           headers=_csrf_headers(client))
+        assert resp.status_code == 401
+    resp = client.post("/auth/2fa/confirmar", json={"codigo": "000000"},
+                       headers=_csrf_headers(client))
+    assert resp.status_code == 429
