@@ -33,8 +33,11 @@ aspiracional — incluindo as limitações conhecidas do POC.
   sem bloqueio ativo — revelar o estado de bloqueio também é enumeração de
   conta (ASVS V2.1 — nunca confirmar a existência de uma matrícula).
 - **Rate limiting** (`slowapi`): 5 requisições/minuto em `/auth/login`,
-  `/auth/2fa/verificar` e `/auth/login-microsoft-demo` — as três rotas que
-  aceitam uma credencial (senha ou código TOTP) sem sessão prévia.
+  `/auth/2fa/verificar`, `/auth/2fa/confirmar`, `/auth/login-microsoft-demo`,
+  `/auth/cadastro` e `/auth/ativar-conta` — toda rota que aceita uma
+  credencial (senha ou código TOTP) ou cria/ativa uma conta; 20/minuto em
+  `GET /auth/convite/{token}` (consulta pública, defesa em profundidade —
+  o token em si já tem 256 bits de entropia).
 - **2FA (TOTP, RFC 6238)** obrigatório para os papéis `gestor` e
   `compliance` — nunca para `analista`, mantendo o fluxo de operação diária
   enxuto. Enrollment em duas etapas (`/auth/2fa/iniciar` gera o segredo sem

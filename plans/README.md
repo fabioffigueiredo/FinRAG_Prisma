@@ -16,7 +16,8 @@ STOP conditions, e atualize sua linha ao terminar.
 | 006  | `analisar_mock` avisa quando pergunta cita fundo inexistente em vez de trocar de fundo silenciosamente | P2 | S | — | DONE (branch `advisor/006-avisar-fundo-nao-reconhecido`, worktree `~/Projetos/prisma-worktrees/plan-006`, commit `590f87a`, revisado 2026-07-20 — o plano original colidia com um bug pré-existente não previsto em `_detectar_fundo_citado` (heurístico "primeira palavra" tratava a palavra genérica "fundo" como apelido distintivo, por causa do padrão de nome do fixture de teste "Fundo {codigo}"); revisor autorizou extensão pontual de escopo — stoplist de palavras genéricas — pra fechar isso sem tocar na lógica de resolução por alias/nome. 211 passed/6 skipped sem regressão, sondagem adversarial própria do revisor com nomes de fundo reais (não-fixture) confirmou nenhuma regressão na resolução por nome. Mergeado em main (commit 2db54c5) e deployado em produção — wiki.ioi.ia.br/prisma, validado ao vivo em 2026-07-20.) |
 
 | 007  | Fechar a Categoria H do catálogo (dimensão/período sem dado) | P2 | S | — | DONE (branch `advisor/007-categoria-h-dimensao-sem-dado`, worktree `~/Projetos/prisma-worktrees/plan-007`, commit `3b7a18a`, revisado 2026-07-20 — diff idêntico ao plano, nenhum arquivo de produção tocado, 229 passed/6 skipped sem regressão (baseline 226). Mergeado em main; sem impacto funcional, não exigiu novo deploy.) |
-| 008  | Achados #5-16 da revisão de código de auth/cadastro/convite | P0/P1 | M | — | TODO |
+| 008  | Achados #5-16 da revisão de código de auth/cadastro/convite | P0/P1 | M | — | DONE (branch `advisor/008-achados-cadastro-convite`, worktree `~/Projetos/prisma-worktrees/plan-008`, commits `296d4d0`+`12a44ea`, 2026-07-21 — dispatch inicial esbarrou em limite de sessão do executor logo no início do Passo 1; concluído diretamente pelo revisor a partir daí, com a mesma disciplina de verificação: suíte completa 238 passed/6 skipped sem regressão (baseline 230, +8 testes novos), `tsc`/`vitest` do frontend limpos, migration testada com downgrade+upgrade real contra o banco de dev. Achado #9 exigiu `ALTER TABLE ... RENAME CONSTRAINT` manual nos bancos de dev/teste (a migration já tinha rodado com nome autogerado) — produção ainda pendente, nota deixada no arquivo da migration. Mergeado em `feature/copiloto-analitico` (merge commit `5bd73e2`).) |
+| 009  | `matricula` única por gestora, não globalmente (achado #15) | P1 | M | 008 | TODO — 008 já mergeado, pode dispatchar |
 
 ## Dependency notes
 
@@ -79,10 +80,8 @@ passar sem alteração).
   mesmo nível de e-mail/senha, e a rota já tem rate limit. Ver
   justificativa completa em `plans/008-*.md`.
 
-## Fora do escopo de `/improve` — decisão de negócio pendente
+## Decisões de negócio já resolvidas pelo usuário
 
 - **`matricula` é `unique` globalmente, não por `gestora_id`** (achado
-  #15 da revisão de auth/cadastro): pode ser intencional (matrícula como
-  identificador nacional único) ou um bug de modelo (deveria ser único
-  só dentro da mesma gestora/tenant). Muda schema + migration nova —
-  perguntar ao usuário antes de decidir, não é uma correção óbvia.
+  #15 da revisão de auth/cadastro): perguntado ao usuário em 2026-07-20 —
+  respondeu que deve ser único só por gestora. Ver plano 009.
