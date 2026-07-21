@@ -107,6 +107,19 @@ reportar separadamente, fora do escopo deste plano de testes (que só
 caracteriza, não corrige arquitetura de benchmark composto — mudança maior,
 candidata a plano futuro dedicado).
 
+**Atualização (2026-07-20):** a lacuna mais visível foi fechada sem abrir a
+mudança de arquitetura maior — em vez de recalcular sob demanda um
+benchmark composto AD HOC pra qualquer fundo (o que continua não suportado
+e é o cenário que o parágrafo acima documenta), foi adicionado um fundo
+(`ETA-27`, `data/seed/fundo_eta.json`) cujo PRÓPRIO benchmark contratual já
+é um composto fixo ("70% CDI + 30% Ibovespa"), com a série diária
+precomputada como blend real das séries de CDI (ALFA-33) e Ibovespa
+(BETA-71) do mesmo período. Isso cobre o caso de uso mais comum na prática
+(multimercado mandatado contra uma cesta) sem exigir recálculo dinâmico em
+tempo de requisição. Ver
+`test_fundo_com_benchmark_composto_proprio_e_reconhecido_e_nao_diverge` em
+`tests/test_copiloto_cenarios_gestor.py`.
+
 ### D. Fundo inexistente ou citado por nome aproximado
 - "mostra o fundo XYZ-99" (não existe)
 - "mostra o fundo de crédito privado" (existe por classe, não por código
