@@ -1,6 +1,6 @@
 # Prisma — Attribution Intelligence
 
-[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-238%20passing-5eead4)
+[![ci](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml/badge.svg)](https://github.com/fabioffigueiredo/FinRAG_Prisma/actions/workflows/ci.yml) ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-f0b952) ![Python](https://img.shields.io/badge/python-3.12-5b8def) ![Next.js](https://img.shields.io/badge/next.js-16-0e1320) ![Ollama](https://img.shields.io/badge/IA-local%20(Ollama)%20ou%20API-5eead4) ![Testes](https://img.shields.io/badge/testes-241%20passing-5eead4)
 
 **A atribuição de performance, explicada.** O Prisma é uma camada cognitiva que
 transforma o resultado da atribuição de performance de fundos em **narrativa
@@ -123,7 +123,7 @@ cd apps/web && ./node_modules/.bin/next dev -p 3100   # http://localhost:3100
 > `.venv/bin/python scripts/classificar_noticias.py --llm`
 
 **Testes:** `cd services/prisma-api && ../../.venv/bin/python -m pytest tests/ -v`
-(244 testes, 238 passam/6 skip, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
+(247 testes, 241 passam/6 skip, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
 `cd apps/web && ./node_modules/.bin/vitest run` (11 testes) ·
 `cd apps/web && ./node_modules/.bin/tsc --noEmit`
 
