@@ -93,7 +93,7 @@ class Usuario(Base):
     __tablename__ = "usuario"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    matricula: Mapped[str] = mapped_column(String(20), unique=True)
+    matricula: Mapped[str] = mapped_column(String(20))
     nome: Mapped[str] = mapped_column(String(120))
     senha_hash: Mapped[str] = mapped_column(String(200))
     papel: Mapped[Papel] = mapped_column(Enum(Papel, name="papel_enum"))
@@ -137,6 +137,14 @@ class Usuario(Base):
     convite_expira_em: Mapped["datetime | None"] = mapped_column(DateTime(timezone=True), nullable=True)
 
     gestora: Mapped["Gestora"] = relationship(back_populates="usuarios")
+
+    __table_args__ = (
+        # Achado #15: matrícula é identificador de RH interno de cada
+        # gestora, não um identificador nacional único — duas gestoras
+        # diferentes podem ter cada uma um funcionário de matrícula "1234"
+        # sem colidir (decisão do usuário, 2026-07-20).
+        UniqueConstraint("gestora_id", "matricula", name="uq_usuario_gestora_matricula"),
+    )
 
 
 class Fundo(Base):
