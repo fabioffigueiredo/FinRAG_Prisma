@@ -80,8 +80,10 @@ function avisarLinkAtivacao(linkAtivacao: string, emailEnviado: boolean) {
     action: {
       label: "Copiar link",
       onClick: () => {
-        navigator.clipboard.writeText(linkAtivacao);
-        toast.success("Link copiado.");
+        navigator.clipboard.writeText(linkAtivacao).then(
+          () => toast.success("Link copiado."),
+          () => toast.error("Não foi possível copiar — copie o link manualmente."),
+        );
       },
     },
   });
