@@ -10,8 +10,9 @@ podendo rodar **100% local e privado** (Ollama).
 
 ![Cockpit](docs/img/cockpit.png)
 
-> ⚠️ Dados 100% fictícios (fundos "Alfa", "Beta" e "Gama"); nenhuma instituição
-> real é citada. Prova de conceito — artefato de demonstração.
+> ⚠️ Dados 100% fictícios (8 fundos-exemplo: Alfa, Beta, Gama, Delta, Epsilon,
+> Zeta, Theta e Eta); nenhuma instituição real é citada. Prova de conceito —
+> artefato de demonstração.
 
 ## Por que existe
 
@@ -41,6 +42,13 @@ comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse v
 - **Cadastro e ativação de conta**: autocadastro público com aprovação de um
   gestor, ou convite direto — os dois convergem num link de ativação de uso
   único (nunca senha por e-mail, padrão OWASP Forgot Password Cheat Sheet).
+- **Multi-tenant de verdade**: matrícula é única por gestora (não globalmente)
+  — o login pede a gestora antes da matrícula, então duas gestoras podem ter
+  funcionários com a mesma matrícula sem colisão.
+- **Benchmark composto nativo**: fundos podem ser compostos (ex.: 70% CDI +
+  30% Ibovespa) sem virar falso positivo de divergência no copiloto — o
+  motor reconhece o benchmark declarado do fundo em vez de comparar contra
+  um índice único fixo.
 
 **Um núcleo, dois adaptadores:** integrado (consome a API da plataforma de
 atribuição do cliente) ou standalone (ingere exports CSV).
@@ -62,7 +70,7 @@ apps/web/.../admin/usuarios/   painel de usuários — só gestor/compliance
 services/prisma-api/   FastAPI — RAG + guardrails (núcleo finrag vendorizado)
 services/prisma-api/finrag/   retrieval FAISS, chunking, guardrails, LLM clients
 data/corpus/           regras de atribuição (corpus RAG, indexado com bge-m3)
-data/seed/             3 fundos-exemplo + notícias classificadas (sentimento)
+data/seed/             8 fundos-exemplo + notícias classificadas (sentimento)
 scripts/               classificação offline de notícias (pipeline TF-IDF+SVM)
 docs/                  deck de pitch (HTML), arquitetura, riscos, negócio, segurança
 ```
