@@ -28,6 +28,12 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // A demonstração é intencionalmente pública, fixa e somente leitura. Ela
+  // não cria sessão, não recebe documentos e não abre ações administrativas.
+  if (pathname === "/demonstracao") {
+    return NextResponse.next();
+  }
+
   if (!temSessao) {
     // request.nextUrl.clone() (não `new URL(path, request.url)`) — só o
     // clone preserva o basePath internamente; um `new URL("/login", ...)`
