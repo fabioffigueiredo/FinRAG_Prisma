@@ -5,8 +5,9 @@
 **A atribuição de performance, explicada.** O Prisma é uma camada cognitiva que
 transforma o resultado da atribuição de performance de fundos em **narrativa
 auditável**: explica em linguagem natural de onde veio o retorno, responde
-perguntas com **citações às fontes** e registra tudo em **trilha de auditoria** —
-podendo rodar **100% local e privado** (Ollama).
+perguntas com **citações às fontes** e registra tudo em **trilha de auditoria**.
+O motor é configurável e pode operar integralmente em ambiente local com Ollama,
+usar um provedor externo ou executar em modo de demonstração determinístico.
 
 ![Cockpit](docs/img/cockpit.png)
 
@@ -14,13 +15,20 @@ podendo rodar **100% local e privado** (Ollama).
 > Zeta, Theta e Eta); nenhuma instituição real é citada. Prova de conceito —
 > artefato de demonstração.
 
+O Prisma é um projeto autoral, apresentado para avaliação de viabilidade técnica
+em um contexto profissional regulado. Permanece sob avaliação e não representa
+produto oficial, recomendação financeira ou implantação em produção.
+
+**Demonstração hospedada:** [wiki.ioi.ia.br/prisma](https://wiki.ioi.ia.br/prisma/)
+
 ## Por que existe
 
 Plataformas de atribuição entregam **números** (contribuição por estratégia/ativo
 vs benchmark). A tradução em **comentário de fundo** — o texto que vai a gestor,
 comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse vão:
 
-- **Narrativa gerada** sobre números que já existem (baixo risco de alucinação);
+- **Narrativa gerada** sobre números que já existem, reduzindo a superfície de
+  geração livre sem eliminar a necessidade de avaliação;
 - **Q&A fundamentado** (RAG) com citações e score de recuperação;
 - **Radar de Mercado**: manchetes públicas recentes passam por filtro de relevância e classificação experimental rastreável; não produzem recomendação;
 - **Pergunte ao Prisma conectado a Sinais de Mercado**: o copiloto conversacional
@@ -34,7 +42,7 @@ comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse v
   ("explica, não recomenda", cobrindo fraseado coloquial — "vale a pena
   resgatar?", "compensa sair?") — postura pensada para ambiente regulado;
 - **Auditoria**: cada consulta registrada (fontes, motor, latência, hash);
-- **Conta e acesso nos padrões de instituição financeira**: login com lockout
+- **Controles de acesso prototipados para um cenário financeiro**: login com lockout
   e rate limiting, 2FA (TOTP) obrigatório para gestor/compliance — com troca
   de dispositivo self-service via step-up de senha —, sessão revogável a
   qualquer momento pelo admin, e trilha de auditoria de login/logout/CRUD de
@@ -42,7 +50,7 @@ comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse v
 - **Cadastro e ativação de conta**: autocadastro público com aprovação de um
   gestor, ou convite direto — os dois convergem num link de ativação de uso
   único (nunca senha por e-mail, padrão OWASP Forgot Password Cheat Sheet).
-- **Multi-tenant de verdade**: matrícula é única por gestora (não globalmente)
+- **Isolamento lógico multi-tenant**: matrícula é única por gestora (não globalmente)
   — o login pede a gestora antes da matrícula, então duas gestoras podem ter
   funcionários com a mesma matrícula sem colisão.
 - **Benchmark composto nativo**: fundos podem ser compostos (ex.: 70% CDI +
@@ -60,6 +68,13 @@ atribuição do cliente) ou standalone (ingere exports CSV).
 | Login | Painel de usuários (admin) |
 |---|---|
 | ![Login](docs/img/login.png) | ![Usuários](docs/img/admin-usuarios.png) |
+
+Na demonstração hospedada, o botão **Entrar com Microsoft** é um atalho que
+simula um fluxo corporativo de SSO; não há integração real com Microsoft Entra
+ID nesse modo. O fluxo próprio de autenticação implementa segundo fator TOTP
+(RFC 6238), ativado por QR Code e compatível com aplicativos como Google
+Authenticator e Microsoft Authenticator. Consulte
+[`docs/SEGURANCA.md`](docs/SEGURANCA.md) para o escopo e as limitações.
 
 ## Arquitetura
 
@@ -94,7 +109,10 @@ Passo a passo de todas as telas (~2 min) — clique na imagem para assistir no Y
 - **Recuperação (RAG):** Hit@4 = 100% · MRR 0,48 sobre golden queries do domínio —
   ver [`docs/METRICAS_RAG.md`](docs/METRICAS_RAG.md) (reproduza: `python scripts/avaliar_rag.py`).
 - **Governança de IA** (escopo, aprovação humana, auditoria, CVM): [`docs/GOVERNANCA_IA.md`](docs/GOVERNANCA_IA.md).
-- **Segurança** (autenticação, sessão, 2FA, auditoria, padrões BACEN 85/2021 + OWASP ASVS): [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
+- **Segurança** (autenticação, sessão, 2FA e auditoria): controles prototipados
+  com referências técnicas e regulatórias aplicáveis ao cenário, sem alegação
+  de certificação ou conformidade institucional —
+  [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
 - **Sinais** de apoio à decisão (probabilísticos, auditáveis, nunca recomendação):
   [`docs/GOVERNANCA_IA.md`](docs/GOVERNANCA_IA.md) §3.
 
@@ -154,3 +172,9 @@ cd apps/web && ./node_modules/.bin/next dev -p 3100   # http://localhost:3100
 Evolução de dois projetos do mesmo autor: **FinNLP** (NLP clássico: sentimento,
 NER, grafo de entidades) e **FinRAG** (RAG com guardrails e citações). O Prisma
 os integra numa camada de produto sobre atribuição de performance.
+
+## Autoria e créditos
+
+- **Arquitetura e implementação:** Fabio Figueiredo.
+- **Contribuição pontual de design:** Guilherme
+  ([@Guilherme-AVVO](https://github.com/Guilherme-AVVO)).
