@@ -12,14 +12,12 @@ vi.mock("next/navigation", () => ({
 
 const getCsrf = vi.fn().mockResolvedValue("csrf-fake");
 const login = vi.fn();
-const loginMicrosoftDemo = vi.fn();
 const verificar2fa = vi.fn();
 const listarGestorasPublico = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getCsrf: (...args: unknown[]) => getCsrf(...args),
   login: (...args: unknown[]) => login(...args),
-  loginMicrosoftDemo: (...args: unknown[]) => loginMicrosoftDemo(...args),
   verificar2fa: (...args: unknown[]) => verificar2fa(...args),
   listarGestorasPublico: (...args: unknown[]) => listarGestorasPublico(...args),
 }));
@@ -49,7 +47,6 @@ describe("LoginPage", () => {
     refresh.mockClear();
     getCsrf.mockClear();
     login.mockReset();
-    loginMicrosoftDemo.mockReset();
     verificar2fa.mockReset();
     listarGestorasPublico.mockReset();
     listarGestorasPublico.mockResolvedValue({ ok: true, gestoras: [{ id: 1, nome: "Gestora Demo" }] });
@@ -71,6 +68,12 @@ describe("LoginPage", () => {
   it("busca o token CSRF ao montar (bootstrap do login-CSRF)", () => {
     render(<LoginPage />);
     expect(getCsrf).toHaveBeenCalledTimes(1);
+  });
+
+  it("oferece demonstração pública sem apresentá-la como provedor de identidade", () => {
+    render(<LoginPage />);
+    expect(screen.getByRole("button", { name: /abrir demonstração pública/i })).toHaveAttribute("href", "/demonstracao");
+    expect(screen.queryByText(/microsoft/i)).not.toBeInTheDocument();
   });
 
   it("mostra a mensagem genérica de erro devolvida pela API, sem indicar qual campo errou", async () => {

@@ -7,7 +7,7 @@ import { PageStagger, Item } from "@/components/app/reveal";
 import { easeOutQuint } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-const TONS: Record<Noticia["sentimento"], string> = {
+const TONS: Record<NonNullable<Noticia["sentimento"]>, string> = {
   positivo: "border-[var(--success)]/30 bg-[var(--success)]/10 text-[var(--success)]",
   negativo: "border-[var(--destructive)]/30 bg-[var(--destructive)]/10 text-[var(--destructive)]",
   neutro: "border-border bg-muted/40 text-muted-foreground",
@@ -31,8 +31,8 @@ export default function RadarPage() {
       <Item>
         <h1 className="font-display text-2xl font-semibold text-foreground">Radar de Mercado</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Notícias do período classificadas pelo pipeline de sentimento do FinNLP e indexadas no
-          RAG — o copiloto as cita ao explicar o &ldquo;porquê de mercado&rdquo;.
+          Manchetes públicas recentes passam por filtros de relevância e classificação experimental.
+          Só itens locais com confiança suficiente entram no agregado. O Radar dá contexto, não recomendação.
         </p>
       </Item>
 
@@ -53,11 +53,15 @@ export default function RadarPage() {
         </Item>
       ) : !radar.ok ? (
         <Item className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          Sem notícias indexadas — rode <span className="font-mono">scripts/classificar_noticias.py</span> e
-          suba a Prisma API.
+          {radar.motivo ?? "Sem manchetes recentes classificadas com confiança suficiente."}
         </Item>
       ) : (
         <>
+          {radar.motivo && (
+            <Item className="border-l-2 border-primary bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              {radar.motivo}
+            </Item>
+          )}
           <Item className="flex flex-wrap gap-2">
             {["todas", ...estrategias].map((e) => {
               const ativo = filtro === e;
@@ -101,17 +105,18 @@ export default function RadarPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium text-foreground">{n.titulo}</p>
-                      <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{n.corpo}</p>
+                      <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                        {n.portal} · publicada em {new Date(n.publicada_em).toLocaleString("pt-BR")}
+                      </p>
                     </div>
-                    <span className={cn("shrink-0 rounded-md border px-2 py-0.5 text-[11px]", TONS[n.sentimento])}>
-                      {n.sentimento}
+                    <span className={cn("shrink-0 rounded-md border px-2 py-0.5 text-[11px]", n.sentimento ? TONS[n.sentimento] : "border-border bg-muted/40 text-muted-foreground")}>
+                      {n.estado === "classificado_local" ? n.sentimento : n.estado === "revisao_assistida" ? "revisão assistida" : "pendente"}
                     </span>
                   </div>
                   <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
-                    <span className="font-mono">{n.data}</span>
-                    <span>·</span>
-                    <span>{n.estrategia}</span>
-                    <span className="font-mono ml-auto">noticia:{n.id}</span>
+                    <a href={n.link} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">Abrir fonte</a>
+                    {n.confianca !== null && <span>confiança {Math.round(n.confianca * 100)}%</span>}
+                    <span className="font-mono ml-auto">{n.classificador ?? "sem classificador"}</span>
                   </div>
                 </motion.li>
               ))}

@@ -17,7 +17,7 @@ export function RadarCard() {
     getRadar().then(setRadar);
   }, []);
 
-  if (!radar?.ok) return null; // sem notícias -> card se oculta (spec)
+  if (!radar?.ok || !Object.keys(radar.agregado).length) return null;
 
   const linhas = Object.entries(radar.agregado).sort((a, b) => b[1].liquido - a[1].liquido);
 
@@ -26,7 +26,7 @@ export function RadarCard() {
       <div className="mb-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <RadarIcon className="h-4 w-4 text-primary" strokeWidth={1.75} />
-          <SectionTitle hint={`${radar.noticias.length} notícias · sentimento FinNLP`}>
+          <SectionTitle hint={`${Object.values(radar.agregado).reduce((total, item) => total + item.total, 0)} manchetes classificadas localmente`}>
             Radar de Mercado
           </SectionTitle>
         </div>
@@ -36,7 +36,7 @@ export function RadarCard() {
       </div>
       {codigo !== "ALFA-33" && (
         <p className="mb-2 text-[11px] text-muted-foreground">
-          Notícias semeadas referem-se ao Alfa Multimercado (POC).
+          Contexto de mercado geral. Não é evidência específica deste fundo.
         </p>
       )}
       <ul className="space-y-2">

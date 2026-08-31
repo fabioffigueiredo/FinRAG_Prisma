@@ -59,7 +59,7 @@ cliente sem reescrever o produto.
 ## Diferenciais defensáveis (moat)
 - RAG **ancorado nas regras de atribuição** (não é chatbot genérico).
 - **Guardrail + auditabilidade** — feito para ambiente regulado.
-- **Modo privado/offline** com stack local de qualidade (LLM 8B + embeddings bge-m3).
+- **Modo privado/offline** com stack local de qualidade (LLM + embeddings configuráveis).
 - Conhecimento de domínio (metodologia de contribuição, FIC, correções de sinal).
 
 ## Riscos e mitigações

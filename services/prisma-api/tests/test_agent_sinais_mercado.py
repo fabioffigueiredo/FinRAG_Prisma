@@ -22,10 +22,10 @@ def _fundo(codigo, retorno_cota, retorno_bench, pontos_cota, estrategias=None):
 
 
 NOTICIAS = [
-    {"id": "n07", "estrategia": "Bolsa Brasil", "sentimento": "negativo"},
-    {"id": "n08", "estrategia": "Bolsa Brasil", "sentimento": "negativo"},
-    {"id": "n09", "estrategia": "Bolsa Brasil", "sentimento": "negativo"},
-    {"id": "n10", "estrategia": "Caixa e Over", "sentimento": "positivo"},
+    {"id": "n07", "estrategia": "Bolsa Brasil", "sentimento": "negativo", "elegivel_agregado": True},
+    {"id": "n08", "estrategia": "Bolsa Brasil", "sentimento": "negativo", "elegivel_agregado": True},
+    {"id": "n09", "estrategia": "Bolsa Brasil", "sentimento": "negativo", "elegivel_agregado": True},
+    {"id": "n10", "estrategia": "Caixa e Over", "sentimento": "positivo", "elegivel_agregado": True},
 ]
 
 

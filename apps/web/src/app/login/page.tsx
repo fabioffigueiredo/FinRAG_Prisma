@@ -10,22 +10,10 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCsrf, listarGestorasPublico, login, loginMicrosoftDemo, verificar2fa, type GestoraPublica } from "@/lib/api";
+import { getCsrf, listarGestorasPublico, login, verificar2fa, type GestoraPublica } from "@/lib/api";
 import { PageStagger, Item } from "@/components/app/reveal";
 
 type EtapaLogin = "credenciais" | "2fa";
-
-/** Glifo oficial de 4 cores — nunca decorativo fora deste contexto. */
-function MicrosoftGlyph() {
-  return (
-    <svg viewBox="0 0 21 21" className="h-4 w-4" aria-hidden="true">
-      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-    </svg>
-  );
-}
 
 /**
  * Split-screen: painel esquerdo é SEMPRE escuro (momento de marca, ancorado
@@ -129,7 +117,6 @@ function CredenciaisForm({
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const [enviandoMs, setEnviandoMs] = useState(false);
 
   useEffect(() => {
     getCsrf();
@@ -148,23 +135,6 @@ function CredenciaisForm({
     }
     if (resultado.requer2fa) {
       onRequer2FA();
-      return;
-    }
-    router.push(destino);
-    router.refresh();
-  }
-
-  /** Simulação de demo — não é OAuth/OIDC real, não fala com Azure AD, e
-   * sempre loga a mesma conta demo fixa (ver services/prisma-api/app.py::
-   * login_microsoft_demo). Um clique só, propositalmente nunca aciona 2FA
-   * (a conta demo é sempre analista). */
-  async function onMicrosoftDemo() {
-    setErro(null);
-    setEnviandoMs(true);
-    const resultado = await loginMicrosoftDemo();
-    setEnviandoMs(false);
-    if (!resultado.ok) {
-      setErro(resultado.erro);
       return;
     }
     router.push(destino);
@@ -224,17 +194,12 @@ function CredenciaisForm({
         >
           {enviando ? "Entrando…" : "Entrar"}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          onClick={onMicrosoftDemo}
-          disabled={enviandoMs}
-          className="w-full"
-        >
-          <MicrosoftGlyph />
-          {enviandoMs ? "Entrando…" : "Entrar com Microsoft"}
+        <Button nativeButton={false} variant="outline" size="lg" className="w-full" render={<Link href="/demonstracao" />}>
+          Abrir demonstração pública
         </Button>
+        <p className="-mt-1 text-center text-xs leading-relaxed text-muted-foreground">
+          A demonstração não cria conta nem usa login. Para acessar uma conta, solicite o cadastro abaixo.
+        </p>
         <p className="text-center text-xs text-muted-foreground">
           Não tem conta?{" "}
           <Link href="/cadastro" className="font-medium text-foreground underline underline-offset-2">

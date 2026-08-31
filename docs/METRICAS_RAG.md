@@ -16,4 +16,4 @@ Reproduza com `python scripts/avaliar_rag.py` (API no ar).
 | Qual foi o retorno do fundo Alfa? | `dados:ALFA-33` | top-1 |
 | Como funciona o benchmark do fundo? | `03_glossario_benchmark` | top-2 |
 
-> Recuperação com embeddings `bge-m3` (1024-d) sobre regras de atribuição + notícias classificadas + dados do fundo. Guardrail de injeção e de escopo aplicados após a recuperação.
+> Recuperação com o embedding configurado no ambiente sobre regras de atribuição e dados fictícios do fundo. Guardrail de injeção e de escopo aplicados após a recuperação. Notícias públicas só entram no Radar depois de seus próprios gates de frescor e classificação.

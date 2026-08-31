@@ -22,7 +22,7 @@ comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse v
 
 - **Narrativa gerada** sobre números que já existem (baixo risco de alucinação);
 - **Q&A fundamentado** (RAG) com citações e score de recuperação;
-- **Radar de Mercado**: notícias classificadas por sentimento dão o "porquê";
+- **Radar de Mercado**: manchetes públicas recentes passam por filtro de relevância e classificação experimental rastreável; não produzem recomendação;
 - **Pergunte ao Prisma conectado a Sinais de Mercado**: o copiloto conversacional
   chama o mesmo modelo de regras auditável do Radar/Sinais (nível, probabilidade,
   evidência por notícia, aviso legal CVM 20) — "qual a indicação de mercado para
@@ -69,14 +69,14 @@ apps/web/.../login/            tela de login (cookie httpOnly + CSRF)
 apps/web/.../admin/usuarios/   painel de usuários — só gestor/compliance
 services/prisma-api/   FastAPI — RAG + guardrails (núcleo finrag vendorizado)
 services/prisma-api/finrag/   retrieval FAISS, chunking, guardrails, LLM clients
-data/corpus/           regras de atribuição (corpus RAG, indexado com bge-m3)
-data/seed/             8 fundos-exemplo + notícias classificadas (sentimento)
+data/corpus/           regras de atribuição (corpus RAG, indexado localmente)
+data/seed/             8 fundos-exemplo + cenário fictício versionado
 scripts/               classificação offline de notícias (pipeline TF-IDF+SVM)
 docs/                  deck de pitch (HTML), arquitetura, riscos, negócio, segurança
 ```
 
 **A IA é flexível — local ou via chave de API.** Três backends selecionáveis na UI:
-- **Local (Ollama)** — `llama3.1:8b` + embeddings `bge-m3:567m` · 100% privado/offline;
+- **Local (Ollama)** — modelo de texto e embedding configuráveis · 100% privado/offline;
 - **Nuvem (Groq)** — `llama-3.1-8b-instant` · baixa latência (basta `GROQ_API_KEY`);
 - **Demo (mock)** — determinístico, roda sem nada.
 
@@ -101,7 +101,7 @@ Passo a passo de todas as telas (~2 min) — clique na imagem para assistir no Y
 ## Como rodar
 
 **Pré-requisitos:** Node 22 + pnpm; Python 3.12 + [uv](https://docs.astral.sh/uv/);
-[Ollama](https://ollama.com) com `ollama pull llama3.1:8b` e `ollama pull bge-m3:567m`;
+[Ollama](https://ollama.com) com os modelos de texto e embedding escolhidos para o ambiente;
 Docker (Postgres de dev — necessário pro login/admin, ver abaixo).
 
 ```bash
@@ -112,10 +112,10 @@ cd apps/web && pnpm install && cd ../..
 # 0.1 Postgres de dev (login, admin de usuários, auditoria) + segredo do JWT
 docker compose -f docker-compose.dev.yml up -d
 export PRISMA_JWT_SECRET="$(openssl rand -hex 32)"   # obrigatório com PRISMA_ENV=production; em dev cai num default inseguro se omitido
-# export PRISMA_DEMO_MATRICULA="DEMO-MS"             # opcional — matrícula da conta demo do botão "Entrar com Microsoft" (simulação, ver docs/SEGURANCA.md)
+# export PRISMA_RADAR_SENTIMENT_ENABLED=1            # habilita o candidato local após a avaliação PT/EN
 cd services/prisma-api && ../../.venv/bin/python -m alembic upgrade head && cd ../..
 
-# 1. API (porta 8000) — indexa o corpus com bge-m3 e pré-aquece o modelo
+# 1. API (porta 8000) — indexa o corpus e pré-aquece o modelo disponível
 cd services/prisma-api && ../../.venv/bin/python -m uvicorn app:app --port 8000
 
 # 2. Frontend (porta 3100)
@@ -123,7 +123,7 @@ cd apps/web && ./node_modules/.bin/next dev -p 3100   # http://localhost:3100
 ```
 
 > Sem a API no ar, o frontend usa dados-exemplo (fallback) e a demo ainda funciona.
-> Sem Ollama, a API cai para embeddings sentence-transformers e o motor "Demo".
+> Sem Ollama, a API usa embeddings sentence-transformers e informa o estado degradado quando não houver motor de texto disponível.
 > Sem Postgres, narrativa/copiloto/radar continuam funcionando (fallback), mas
 > **login e o painel de usuários exigem banco** — não há modo demo pra auth.
 > Reclassificar as notícias do radar (opcional):

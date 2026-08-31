@@ -33,7 +33,7 @@ aspiracional — incluindo as limitações conhecidas do POC.
   sem bloqueio ativo — revelar o estado de bloqueio também é enumeração de
   conta (ASVS V2.1 — nunca confirmar a existência de uma matrícula).
 - **Rate limiting** (`slowapi`): 5 requisições/minuto em `/auth/login`,
-  `/auth/2fa/verificar`, `/auth/2fa/confirmar`, `/auth/login-microsoft-demo`,
+  `/auth/2fa/verificar`, `/auth/2fa/confirmar`,
   `/auth/cadastro` e `/auth/ativar-conta` — toda rota que aceita uma
   credencial (senha ou código TOTP) ou cria/ativa uma conta; 20/minuto em
   `GET /auth/convite/{token}` (consulta pública, defesa em profundidade —
@@ -45,11 +45,9 @@ aspiracional — incluindo as limitações conhecidas do POC.
   provando que o usuário configurou certo). Login em duas etapas usa um
   cookie **separado** (`prisma_pre2fa`, 5 min) do cookie de sessão — um
   token pendente de 2FA nunca abre nenhuma outra rota protegida.
-- **Login "Entrar com Microsoft"** é uma **simulação de demonstração** —
-  documentado explicitamente no código (`app.py::login_microsoft_demo`) e na
-  UI. Não é OAuth/OIDC real, não fala com Azure AD, sempre autentica a mesma
-  conta fixa (`PRISMA_DEMO_MATRICULA`, papel `analista` de propósito, nunca
-  aciona 2FA).
+- **Demonstração pública** não é login e não emite sessão. Ela expõe apenas
+  cenário fixo com dados fictícios; OAuth/OIDC só será apresentado quando uma
+  integração real estiver configurada e validada.
 - CSRF (double-submit cookie) protege toda rota de mutação, incluindo login
   — o próprio `/auth/csrf` é chamado ao montar a página, antes de existir
   sessão, fechando o vetor de login CSRF.
@@ -105,7 +103,7 @@ segurança que o gestor pode copiar manualmente.
 - `audit.registrar_evento()` grava, por evento: horário, rota, matrícula do
   ator e descrição — reaproveita o mesmo armazenamento (Postgres + fallback
   JSONL) já usado pela auditoria de consultas RAG do produto.
-- Eventos cobertos: login (sucesso/falha/bloqueio/via Microsoft-demo),
+- Eventos cobertos: login (sucesso/falha/bloqueio),
   logout, troca de senha, upload de avatar, enrollment/confirmação/verificação
   de 2FA, criação/edição de usuário, força de troca de senha, revogação de
   sessão.
@@ -141,7 +139,7 @@ Documentadas de propósito, não escondidas:
   simples contra autodesativação (um usuário não pode desativar a própria
   conta), herdada de uma sessão anterior. Não impede, por exemplo, que o
   último gestor ativo de uma gestora seja desativado por outro gestor.
-- **Login "Entrar com Microsoft" é simulação** — ver seção 2, V2.
+- **Demonstração pública não substitui autenticação** — ver seção 2, V2.
 - **`SENDGRID_API_KEY`/`SENDGRID_FROM_EMAIL` não configurados** faz
   `enviar_email_ativacao` sempre devolver `False` sem lançar — degrada pro
   link-na-resposta (ver seção "Cadastro, convite e ativação de conta").

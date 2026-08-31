@@ -7,9 +7,10 @@ email-validator==2.2.0         # pydantic.EmailStr (achado #14 — validar forma
 numpy==1.26.4
 faiss-cpu==1.8.0
 sentence-transformers==3.0.1   # fallback de embeddings quando o Ollama não está disponível
+transformers==4.57.6           # classificador local multilíngue do Radar, fixado por revisão
 rank-bm25==0.2.2
 groq==1.5.0                    # backend "Nuvem" (opcional; requer GROQ_API_KEY)
-feedparser==6.0.11              # radar de mercado: RSS bilíngue EN+PT, com fallback pro seed estático
+feedparser==6.0.11              # radar de mercado: RSS bilíngue EN+PT, sem fallback que simule notícia ao vivo
 sqlalchemy==2.0.36              # Meta 1: fundação de dados (schema Fundo/Estrategia SCD2/VaR/Benchmark)
 alembic==1.14.0                 # Meta 1: migrations versionadas do schema
 psycopg[binary]==3.2.3          # Meta 1: driver Postgres

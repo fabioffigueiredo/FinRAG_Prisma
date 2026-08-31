@@ -6,12 +6,13 @@ Envolve o núcleo FinRAG (retrieval + guardrail + prompt aumentado) e expõe:
   GET  /health      -> status + backends disponíveis
 
 O pacote finrag (retrieval/guardrails) é vendorizado em ./finrag; adiciona
-backend Ollama (local) e embeddings bge-m3.
+backend Ollama (local) e embeddings configuráveis.
 """
 from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -72,10 +73,10 @@ from escopo import (  # noqa: E402
 )
 import audit                                                             # noqa: E402
 import agent as agente                                                   # noqa: E402
-from radar import carregar_noticias, agregar                             # noqa: E402
+from radar import agregar, persistir_lote, refresh                       # noqa: E402
 from sinais import gerar_sinais, AVISO_LEGAL, MODELO_VERSAO              # noqa: E402
 import auth                                                              # noqa: E402
-from db.session import get_db                                           # noqa: E402
+from db.session import SessionLocal, get_db                             # noqa: E402
 import observability                                                     # noqa: E402
 
 app = FastAPI(title="Prisma API", version="0.1.0")
@@ -111,7 +112,14 @@ app.add_middleware(SecurityHeadersMiddleware)
 # também devem valer pros arquivos estáticos (avatares).
 app.mount("/static", StaticFiles(directory=str(HERE.parent / "static")), name="static")
 
-STATE: dict = {"index": None, "embed": "?", "fundos": None, "noticias": None}
+STATE: dict = {
+    "index": None,
+    "embed": "?",
+    "fundos": None,
+    "noticias": [],
+    "radar": {"estado": "indisponivel", "motivo": "ainda não atualizado"},
+}
+_RADAR_STOP = threading.Event()
 
 NOMES_FUNDOS = {
     "alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12",
@@ -137,7 +145,9 @@ def _corpus_docs():
         from finrag.corpus import Document
         docs.append(Document(id=md.stem, text=md.read_text(encoding="utf-8"), source=md.name))
     from finrag.corpus import Document
-    for n in carregar_noticias(NOTICIAS_PATH):
+    # Notícias ao vivo não entram automaticamente no corpus RAG. Só o
+    # conjunto fictício, versionado e revisável faz parte dessa evidência.
+    for n in json.loads(NOTICIAS_PATH.read_text(encoding="utf-8")):
         docs.append(Document(
             id=f"noticia_{n['id']}",
             text=(f"Notícia ({n['data']}, estratégia {n['estrategia']}, "
@@ -160,9 +170,47 @@ def _startup() -> None:
     for fj in sorted(SEED_DIR.glob("fundo_*.json")):
         d = json.loads(fj.read_text(encoding="utf-8"))
         STATE["fundos"][d["fundo"]["codigo"]] = d
-    STATE["noticias"] = carregar_noticias(NOTICIAS_PATH)
+    if os.environ.get("PRISMA_RADAR_REFRESH_ON_STARTUP", "0") == "1":
+        _atualizar_radar()
+    else:
+        STATE["noticias"] = []
+        STATE["radar"] = {
+            "estado": "indisponivel",
+            "motivo": "atualização automática do Radar não habilitada neste ambiente",
+        }
     if ollama_disponivel():
         OllamaClient().warmup()
+
+    if os.environ.get("PRISMA_RADAR_REFRESH_ENABLED", "0") == "1":
+        _RADAR_STOP.clear()
+        threading.Thread(target=_ciclo_radar, name="prisma-radar", daemon=True).start()
+
+
+@app.on_event("shutdown")
+def _shutdown() -> None:
+    _RADAR_STOP.set()
+
+
+def _atualizar_radar() -> None:
+    """Atualiza estado em memória e persiste o lote quando o banco estiver pronto."""
+    noticias, radar_status = refresh()
+    STATE["noticias"] = noticias
+    STATE["radar"] = radar_status
+    try:
+        with SessionLocal() as db:
+            persistir_lote(db, noticias, radar_status)
+    except Exception:  # noqa: BLE001 - banco não pode apagar o lote em memória
+        STATE["radar"] = {
+            **radar_status,
+            "estado": "degradado",
+            "motivo": "lote não foi persistido; verifique a base de dados",
+        }
+
+
+def _ciclo_radar() -> None:
+    intervalo = max(5, int(os.environ.get("PRISMA_RADAR_REFRESH_MINUTES", "30"))) * 60
+    while not _RADAR_STOP.wait(intervalo):
+        _atualizar_radar()
 
 
 class NarrativaReq(BaseModel):
@@ -513,57 +561,6 @@ def _verificar_2fa_com_rate_limit(request: Request, req: Verificar2FAReq, respon
                      papel=usuario.papel.value, gestora_id=usuario.gestora_id)
 
 
-PRISMA_DEMO_MATRICULA = os.environ.get("PRISMA_DEMO_MATRICULA", "DEMO-MS")
-
-
-@app.post("/auth/login-microsoft-demo", response_model=LoginResp, dependencies=[Depends(auth.verificar_csrf)])
-def login_microsoft_demo(request: Request, response: Response, db=Depends(get_db)):
-    """Fininho, mesmo motivo das outras rotas com rate limit (ver skill
-    fastapi-slowapi-future-annotations)."""
-    return _login_microsoft_demo_com_rate_limit(request, response, db)
-
-
-@limiter.limit("5/minute")
-def _login_microsoft_demo_com_rate_limit(request: Request, response: Response, db) -> LoginResp:
-    """NÃO é OAuth/OIDC real — não fala com Azure AD, não valida credencial
-    nenhuma. Sempre loga a MESMA conta demo fixa (get-or-create idempotente),
-    só pra mostrar o botão "Entrar com Microsoft" na demo. papel=ANALISTA de
-    propósito: mantém o clique único simples e nunca aciona 2FA."""
-    import secrets as _secrets
-
-    from sqlalchemy import select as _select
-
-    from db.models import Gestora as _Gestora
-    from db.models import Papel as _Papel
-    from db.models import Usuario as _Usuario
-    from db.repo import criar_usuario as _criar_usuario
-
-    # .scalars().first() em vez de .scalar(): matrícula não é mais única
-    # globalmente (achado #15) — esta conta demo fixa não pede gestora
-    # (propositalmente, é um atalho de 1 clique), então defende contra
-    # `MultipleResultsFound` se um dia existir mais de uma linha com essa
-    # matrícula em gestoras diferentes.
-    usuario = db.scalars(_select(_Usuario).where(_Usuario.matricula == PRISMA_DEMO_MATRICULA)).first()
-    if usuario is None:
-        gestora = db.scalar(_select(_Gestora).order_by(_Gestora.id).limit(1))
-        if gestora is None:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                                detail="nenhuma gestora cadastrada — não é possível criar a conta demo")
-        senha_inutilizavel = auth.hash_senha(_secrets.token_urlsafe(32))
-        usuario = _criar_usuario(db, gestora_id=gestora.id, matricula=PRISMA_DEMO_MATRICULA,
-                                 nome="Conta Demo Microsoft", senha_hash=senha_inutilizavel,
-                                 papel=_Papel.ANALISTA)
-        db.commit()
-    elif not usuario.ativo:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="conta demo desativada")
-
-    auth.emitir_cookies_sessao(response, usuario)
-    audit.registrar_evento(rota="/auth/login-microsoft-demo", ator_matricula=usuario.matricula,
-                           descricao="login via Microsoft (simulação de demo)")
-    return LoginResp(token=auth.criar_token(usuario), nome=usuario.nome,
-                     papel=usuario.papel.value, gestora_id=usuario.gestora_id)
-
-
 # --- Cadastro / convite / ativação de conta ---------------------------------
 #
 # Nunca envia senha por e-mail (temporária ou não) — padrão de mercado (OWASP
@@ -814,9 +811,30 @@ def _gerar_seguro(backend: str, prompt: str, rota: str = "", **kw) -> tuple[str,
 def health():
     return {
         "status": "ok",
-        "embed": STATE["embed"],
-        "ollama": ollama_disponivel(),
+        "embeddings": {"estado": "disponivel", "motor": STATE["embed"]},
+        "texto": {
+            "estado": "disponivel" if os.environ.get("GROQ_API_KEY") or ollama_disponivel() else "degradado",
+            "motor": "groq" if os.environ.get("GROQ_API_KEY") else "ollama" if ollama_disponivel() else "demo",
+        },
+        "radar": STATE["radar"],
         "chunks": len(STATE["index"]._chunks) if STATE["index"] else 0,
+    }
+
+
+@app.get("/demo/status")
+def demo_status():
+    """Estado seguro para a rota pública; sem segredos ou detalhes de sessão."""
+    health_state = health()
+    return {
+        "ok": True,
+        "dados": "fictícios",
+        "texto": health_state["texto"],
+        "embeddings": health_state["embeddings"],
+        "radar": STATE["radar"],
+        "limites": [
+            "A demonstração não cria conta, não recebe arquivos e não aceita perguntas livres.",
+            "O PRISMA explica um cenário fictício; não produz recomendação financeira.",
+        ],
     }
 
 
@@ -990,10 +1008,18 @@ def ingerir(req: IngestReq):
 @app.get("/radar")
 def radar_endpoint():
     noticias = STATE.get("noticias") or []
-    if not noticias:
-        return {"ok": False, "noticias": [], "agregado": {}, "degradado": True}
-    degradado = not any(n.get("fonte") == "rss" for n in noticias)
-    return {"ok": True, "noticias": noticias, "agregado": agregar(noticias), "degradado": degradado}
+    status_radar = STATE.get("radar") or {}
+    agregado = agregar(noticias)
+    return {
+        "ok": bool(noticias),
+        "noticias": noticias,
+        "agregado": agregado,
+        "estado": status_radar.get("estado", "indisponivel"),
+        "atualizado_em": status_radar.get("atualizado_em"),
+        "modelo": status_radar.get("modelo"),
+        "motivo": status_radar.get("motivo"),
+        "degradado": status_radar.get("estado") != "disponivel",
+    }
 
 
 @app.get("/sinais")
@@ -1001,10 +1027,16 @@ def sinais_endpoint(fundo: str = "ALFA-33"):
     """Alertas probabilísticos de apoio à decisão (modelo de regras auditável)."""
     fundos = STATE.get("fundos") or {}
     f = fundos.get(fundo) or (next(iter(fundos.values())) if fundos else None)
-    noticias = STATE.get("noticias") or []
-    if not f or not noticias:
-        return {"ok": False, "sinais": [], "aviso": AVISO_LEGAL, "modelo": MODELO_VERSAO}
-    sinais = gerar_sinais(f, agregar(noticias), noticias)
+    noticias = [n for n in (STATE.get("noticias") or []) if n.get("elegivel_agregado")]
+    agregado = agregar(noticias)
+    if not f or not noticias or not agregado:
+        return {
+            "ok": False,
+            "sinais": [],
+            "aviso": "Sem evidência recente e classificada com confiança suficiente. " + AVISO_LEGAL,
+            "modelo": MODELO_VERSAO,
+        }
+    sinais = gerar_sinais(f, agregado, noticias)
     return {"ok": True, "sinais": sinais, "aviso": AVISO_LEGAL, "modelo": MODELO_VERSAO}
 
 

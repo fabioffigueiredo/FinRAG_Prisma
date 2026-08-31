@@ -1,4 +1,4 @@
-"""Embeddings do Prisma via Ollama bge-m3 (1024-dim, multilíngue SOTA).
+"""Embeddings do Prisma via Ollama, com modelo configurável.
 
 Expõe uma função compatível com o *seam* SemanticIndex(embed_fn=...) do FinRAG.
 Se o Ollama não estiver disponível, retorna None para que o índice caia no
@@ -32,7 +32,7 @@ def ollama_embed(texts: list[str]) -> np.ndarray:
 
 
 def get_embed_fn():
-    """Retorna a função de embedding bge-m3 se o Ollama responder; senão None."""
+    """Retorna a função de embedding configurada se o Ollama responder; senão None."""
     try:
         requests.get(f"{OLLAMA_BASE}/api/version", timeout=2).raise_for_status()
         # valida o modelo com uma chamada curta

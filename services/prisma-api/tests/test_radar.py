@@ -6,11 +6,11 @@ from radar import agregar, carregar_noticias
 
 def test_agregar_liquido():
     noticias = [
-        {"estrategia": "Bolsa Brasil", "sentimento": "positivo"},
-        {"estrategia": "Bolsa Brasil", "sentimento": "positivo"},
-        {"estrategia": "Bolsa Brasil", "sentimento": "negativo"},
-        {"estrategia": "Bolsa Brasil", "sentimento": "neutro"},
-        {"estrategia": "Caixa e Over", "sentimento": "neutro"},
+        {"estrategia": "Bolsa Brasil", "sentimento": "positivo", "elegivel_agregado": True},
+        {"estrategia": "Bolsa Brasil", "sentimento": "positivo", "elegivel_agregado": True},
+        {"estrategia": "Bolsa Brasil", "sentimento": "negativo", "elegivel_agregado": True},
+        {"estrategia": "Bolsa Brasil", "sentimento": "neutro", "elegivel_agregado": True},
+        {"estrategia": "Caixa e Over", "sentimento": "neutro", "elegivel_agregado": True},
     ]
     agg = agregar(noticias)
     bb = agg["Bolsa Brasil"]

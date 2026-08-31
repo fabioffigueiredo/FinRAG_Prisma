@@ -33,6 +33,11 @@ services:
       # base do link de ativação de conta (/ativar-conta/{token}) — sem isso
       # cai no default de dev (localhost:3100), quebrando o link no e-mail
       PRISMA_WEB_URL: https://wiki.ioi.ia.br/prisma
+      # Radar fica desabilitado até o conjunto PT/EN revisado e o benchmark
+      # comparativo serem aprovados. Não há classificação silenciosa em produção.
+      PRISMA_RADAR_REFRESH_ON_STARTUP: "0"
+      PRISMA_RADAR_REFRESH_ENABLED: "0"
+      PRISMA_RADAR_SENTIMENT_ENABLED: "0"
     ports:
       - "127.0.0.1:8000:8000"             # exposto só ao localhost; proxy reverso faz o resto
     networks: [prisma-net]

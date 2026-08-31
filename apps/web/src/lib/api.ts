@@ -179,17 +179,27 @@ export function analisar(pergunta: string, backend: Backend, fundo?: string): Pr
 export type Noticia = {
   id: string;
   titulo: string;
-  corpo: string;
+  link: string;
+  portal: string;
   estrategia: string;
-  data: string;
-  sentimento: "positivo" | "negativo" | "neutro";
-  confianca: number;
+  publicada_em: string;
+  coletada_em: string;
+  relevante: boolean;
+  estado: "classificado_local" | "revisao_assistida" | "pendente_revisao";
+  sentimento: "positivo" | "negativo" | "neutro" | null;
+  confianca: number | null;
+  classificador: string | null;
+  elegivel_agregado: boolean;
 };
 
 export type RadarResp = {
   ok: boolean;
   noticias: Noticia[];
   agregado: Record<string, { pos: number; neg: number; neu: number; total: number; liquido: number }>;
+  estado: "disponivel" | "degradado" | "indisponivel";
+  atualizado_em?: string | null;
+  modelo?: string | null;
+  motivo?: string | null;
 };
 
 export async function getRadar(): Promise<RadarResp> {
@@ -198,7 +208,7 @@ export async function getRadar(): Promise<RadarResp> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as RadarResp;
   } catch {
-    return { ok: false, noticias: [], agregado: {} };
+    return { ok: false, noticias: [], agregado: {}, estado: "indisponivel", motivo: "não foi possível consultar o Radar" };
   }
 }
 
@@ -282,22 +292,6 @@ export async function verificar2fa(codigo: string): Promise<LoginResultado> {
     });
     const corpo = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, erro: corpo.detail ?? "código inválido" };
-    return { ok: true, nome: corpo.nome, papel: corpo.papel, gestora_id: corpo.gestora_id, requer2fa: !!corpo.requer_2fa };
-  } catch {
-    return { ok: false, erro: "sem conexão com a API" };
-  }
-}
-
-/** Simulação de demo — não é OAuth/OIDC real, sempre loga a mesma conta fixa. */
-export async function loginMicrosoftDemo(): Promise<LoginResultado> {
-  try {
-    const res = await fetch(`${BASE}/auth/login-microsoft-demo`, {
-      method: "POST",
-      credentials: "include",
-      headers: headersComCsrf(),
-    });
-    const corpo = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, erro: corpo.detail ?? "não foi possível entrar" };
     return { ok: true, nome: corpo.nome, papel: corpo.papel, gestora_id: corpo.gestora_id, requer2fa: !!corpo.requer_2fa };
   } catch {
     return { ok: false, erro: "sem conexão com a API" };

@@ -27,7 +27,7 @@
 
     [Fontes existentes]                [Notícias]
       API da plataforma de atribuição   feed classificado (sentimento FinNLP)
-           │ JSON de atribuição              │ embeddings bge-m3
+           │ JSON de atribuição              │ embeddings configuráveis
            ▼                                 ▼
     [Prisma API — FastAPI :8000]  ← núcleo FinRAG (retrieval + guardrail)
       /narrativa  /perguntar  /radar  /auditoria  /ingerir

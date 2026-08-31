@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import re
 import socket
+from datetime import UTC, datetime
 from typing import Any
 
 import feedparser
@@ -40,12 +41,22 @@ def parse_feed_entries(entries: list[dict], portal: str) -> list[dict[str, Any]]
         if not title:
             continue
         summary = _strip_html(e.get("summary", ""))
+        published = e.get("published_parsed") or e.get("updated_parsed")
+        if not published:
+            # Sem horário de publicação não existe como aplicar a janela de
+            # frescor de forma honesta. O item é descartado antes do Radar.
+            continue
+        try:
+            published_at = datetime(*published[:6], tzinfo=UTC).isoformat()
+        except (TypeError, ValueError):
+            continue
         out.append({
             "title": title,
             "summary": summary,
             "text": f"{title}. {summary}".strip(),
             "link": e.get("link", ""),
             "portal": portal,
+            "published_at": published_at,
         })
     return out
 

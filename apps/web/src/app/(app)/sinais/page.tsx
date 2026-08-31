@@ -88,7 +88,7 @@ export default function SinaisPage() {
         </Item>
       ) : !data.ok ? (
         <Item className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          Sem sinais — suba a API e as notícias classificadas do radar.
+          Sem sinais — faltam notícias recentes, relevantes e classificadas com confiança suficiente.
         </Item>
       ) : (
         <ul className="space-y-3">

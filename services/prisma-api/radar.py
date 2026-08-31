@@ -1,69 +1,100 @@
-"""Radar de Mercado: carga das notícias classificadas e agregado por estratégia."""
-import json
-import logging
-from datetime import date
-from pathlib import Path
+"""Radar de Mercado: ingestão em lote, estado explícito e agregação segura."""
+from __future__ import annotations
 
+import logging
+import os
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from radar_pipeline import LocalFinbertClassifier, classify_entries, status_for
 from rss_scraper import fetch_feeds
 
 _log = logging.getLogger(__name__)
+_runtime_classifier: LocalFinbertClassifier | None = None
+_runtime_classifier_initialized = False
 
 
-def _carregar_seed(caminho: Path) -> list[dict]:
+def classifier_for_runtime():
+    """Só habilita o modelo após avaliação e configuração explícita."""
+    global _runtime_classifier, _runtime_classifier_initialized
+    if os.environ.get("PRISMA_RADAR_SENTIMENT_ENABLED", "0") != "1":
+        return None
+    # O runner em lote não deve recarregar os pesos a cada ciclo de 30 min.
+    # Um erro posterior de inferência continua falhando fechado no pipeline.
+    if not _runtime_classifier_initialized:
+        _runtime_classifier = LocalFinbertClassifier()
+        _runtime_classifier_initialized = True
+    return _runtime_classifier
+
+
+def carregar_noticias(_: Path | None = None, *, classifier=None, now: datetime | None = None) -> list[dict[str, Any]]:
+    """Busca e classifica um lote. Não usa seed como falso dado ao vivo."""
     try:
-        noticias = json.loads(Path(caminho).read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return []
+        entries = fetch_feeds()
+    except Exception:  # noqa: BLE001 - o Radar deve degradar sem derrubar a API
+        _log.exception("RSS falhou; Radar sem lote atual.")
+        entries = []
+    runtime_classifier = classifier if classifier is not None else classifier_for_runtime()
+    return classify_entries(entries, classifier=runtime_classifier, now=now)
+
+
+def agregar(noticias: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Agrega exclusivamente classificação local de alta confiança."""
+    out: dict[str, dict[str, Any]] = {}
     for n in noticias:
-        n.setdefault("fonte", "seed")
-    return noticias
-
-
-def _rss_para_noticia(entry: dict, indice: int) -> dict:
-    """Converto uma entrada de RSS pro schema de notícia do radar.
-
-    Decidi marcar `sentimento: neutro` e `confianca: 0.0` em vez de inventar
-    uma classificação porque notei que não existe classificador SVM rodando
-    ao vivo nesta API — o `sentimento_svm` do seed foi calculado uma vez,
-    offline (ver docs/INTEGRATION_RISKS.md #7). Fingir uma nota de confiança
-    aqui seria pior do que admitir que a notícia ainda não foi classificada.
-    """
-    return {
-        "id": f"rss-{indice}",
-        "titulo": entry["title"],
-        "corpo": entry["summary"] or entry["text"],
-        "estrategia": "Mercado Geral",
-        "data": date.today().isoformat(),
-        "sentimento": "neutro",
-        "confianca": 0.0,
-        "classificado": False,
-        "fonte": "rss",
-        "portal": entry["portal"],
-    }
-
-
-def carregar_noticias(caminho: Path) -> list[dict]:
-    """Tento RSS ao vivo (EN+PT) primeiro; caio pro seed estático se vier
-    vazio ou o fetch falhar — mesmo padrão de degradação já usado pro LLM
-    (real -> mock), pra API nunca quebrar por causa de um feed fora do ar."""
-    try:
-        entradas = fetch_feeds()
-    except Exception:  # noqa: BLE001 — robustez: nunca derruba a API
-        _log.exception("fetch_feeds falhou; caindo para o seed estático de notícias.")
-        entradas = []
-    if entradas:
-        return [_rss_para_noticia(e, i) for i, e in enumerate(entradas)]
-    return _carregar_seed(caminho)
-
-
-def agregar(noticias: list[dict]) -> dict[str, dict]:
-    out: dict[str, dict] = {}
-    for n in noticias:
-        e = n.get("estrategia", "—")
+        if not n.get("elegivel_agregado"):
+            continue
+        e = n.get("estrategia", "Mercado geral")
         g = out.setdefault(e, {"pos": 0, "neg": 0, "neu": 0, "total": 0, "liquido": 0.0})
-        s = n.get("sentimento", "neutro")
+        s = n.get("sentimento")
+        if s not in {"positivo", "negativo", "neutro"}:
+            continue
         g["pos" if s == "positivo" else "neg" if s == "negativo" else "neu"] += 1
         g["total"] += 1
     for g in out.values():
         g["liquido"] = round((g["pos"] - g["neg"]) / g["total"], 2) if g["total"] else 0.0
     return out
+
+
+def refresh(*, classifier=None, now: datetime | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    now = now or datetime.now(UTC)
+    runtime_classifier = classifier if classifier is not None else classifier_for_runtime()
+    noticias = carregar_noticias(classifier=runtime_classifier, now=now)
+    status = status_for(noticias, runtime_classifier)
+    status["atualizado_em"] = now.isoformat()
+    return noticias, status
+
+
+def persistir_lote(db, noticias: list[dict[str, Any]], status: dict[str, Any]) -> None:
+    """Persiste metadados mínimos de cada lote, inclusive reclassificações."""
+    from db.models import RadarLote, RadarNoticia
+
+    lote = RadarLote(
+        coletado_em=datetime.fromisoformat(status["atualizado_em"]),
+        estado=status["estado"],
+        modelo=status.get("modelo"),
+        total_coletadas=status["coletadas"],
+        total_elegiveis=status["elegiveis"],
+        motivo=status.get("motivo"),
+    )
+    db.add(lote)
+    db.flush()
+    for noticia in noticias:
+        db.add(RadarNoticia(
+            lote_id=lote.id,
+            fingerprint=noticia["fingerprint"],
+            titulo=noticia["titulo"],
+            url=noticia["link"],
+            portal=noticia["portal"],
+            publicada_em=datetime.fromisoformat(noticia["publicada_em"]),
+            coletada_em=datetime.fromisoformat(noticia["coletada_em"]),
+            relevante=noticia["relevante"],
+            estado=noticia["estado"],
+            sentimento=noticia["sentimento"],
+            confianca=noticia["confianca"],
+            classificador=noticia["classificador"],
+            estrategia=noticia["estrategia"],
+            elegivel_agregado=noticia["elegivel_agregado"],
+        ))
+    db.commit()

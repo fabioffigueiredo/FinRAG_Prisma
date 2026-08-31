@@ -321,3 +321,41 @@ class BenchmarkPeso(Base):
     peso: Mapped[float] = mapped_column(Float)  # 0-1
     dt_versao: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class RadarLote(Base):
+    """Uma coleta do Radar, com configuração e resultado reproduzíveis."""
+    __tablename__ = "radar_lote"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    coletado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    estado: Mapped[str] = mapped_column(String(30))
+    modelo: Mapped["str | None"] = mapped_column(String(220), nullable=True)
+    total_coletadas: Mapped[int] = mapped_column(default=0)
+    total_elegiveis: Mapped[int] = mapped_column(default=0)
+    motivo: Mapped["str | None"] = mapped_column(String(300), nullable=True)
+
+
+class RadarNoticia(Base):
+    """Metadados mínimos de manchete pública, sem corpo de notícia persistido."""
+    __tablename__ = "radar_noticia"
+    __table_args__ = (
+        Index("ix_radar_noticia_fingerprint", "fingerprint"),
+        Index("ix_radar_noticia_lote_estado", "lote_id", "estado"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lote_id: Mapped[int] = mapped_column(ForeignKey("radar_lote.id"), index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    titulo: Mapped[str] = mapped_column(String(500))
+    url: Mapped[str] = mapped_column(String(1200))
+    portal: Mapped[str] = mapped_column(String(120))
+    publicada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    coletada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    relevante: Mapped[bool] = mapped_column(Boolean, default=False)
+    estado: Mapped[str] = mapped_column(String(30), index=True)
+    sentimento: Mapped["str | None"] = mapped_column(String(16), nullable=True)
+    confianca: Mapped["float | None"] = mapped_column(Float, nullable=True)
+    classificador: Mapped["str | None"] = mapped_column(String(220), nullable=True)
+    estrategia: Mapped[str] = mapped_column(String(120), default="Mercado geral")
+    elegivel_agregado: Mapped[bool] = mapped_column(Boolean, default=False)
