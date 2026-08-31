@@ -30,7 +30,7 @@ comitê e cliente — ainda é manual, lenta e sem trilha. O Prisma fecha esse v
 - **Narrativa gerada** sobre números que já existem, reduzindo a superfície de
   geração livre sem eliminar a necessidade de avaliação;
 - **Q&A fundamentado** (RAG) com citações e score de recuperação;
-- **Radar de Mercado**: manchetes públicas recentes passam por filtro de relevância e classificação experimental rastreável; não produzem recomendação;
+- **Radar de Mercado**: manchetes públicas recentes passam por filtro de relevância. A classificação experimental permanece desativada na demonstração hospedada até concluir o benchmark PT/EN; sem evidência qualificada, a interface informa indisponibilidade, não um sinal;
 - **Pergunte ao Prisma conectado a Sinais de Mercado**: o copiloto conversacional
   chama o mesmo modelo de regras auditável do Radar/Sinais (nível, probabilidade,
   evidência por notícia, aviso legal CVM 20) — "qual a indicação de mercado para
@@ -69,12 +69,11 @@ atribuição do cliente) ou standalone (ingere exports CSV).
 |---|---|
 | ![Login](docs/img/login.png) | ![Usuários](docs/img/admin-usuarios.png) |
 
-Na demonstração hospedada, o botão **Entrar com Microsoft** é um atalho que
-simula um fluxo corporativo de SSO; não há integração real com Microsoft Entra
-ID nesse modo. O fluxo próprio de autenticação implementa segundo fator TOTP
-(RFC 6238), ativado por QR Code e compatível com aplicativos como Google
-Authenticator e Microsoft Authenticator. Consulte
-[`docs/SEGURANCA.md`](docs/SEGURANCA.md) para o escopo e as limitações.
+A demonstração hospedada é uma rota pública, somente leitura, com cenário e
+dados fictícios. Ela não simula SSO nem cria sessão. O fluxo de conta é separado:
+o cadastro aguarda aprovação e os papéis de gestor e compliance configuram o
+segundo fator TOTP. Consulte [`docs/SEGURANCA.md`](docs/SEGURANCA.md) para o
+escopo e as limitações.
 
 ## Arquitetura
 
@@ -142,15 +141,16 @@ cd apps/web && ./node_modules/.bin/next dev -p 3100   # http://localhost:3100
 
 > Sem a API no ar, o frontend usa dados-exemplo (fallback) e a demo ainda funciona.
 > Sem Ollama, a API usa embeddings sentence-transformers e informa o estado degradado quando não houver motor de texto disponível.
-> Sem Postgres, narrativa/copiloto/radar continuam funcionando (fallback), mas
-> **login e o painel de usuários exigem banco** — não há modo demo pra auth.
+> Sem Postgres, narrativa e copiloto podem operar em modo degradado, mas a
+> persistência do Radar, login e o painel de usuários exigem banco. A demo pública
+> não depende de uma sessão de autenticação.
 > Reclassificar as notícias do radar (opcional):
 > `pip install -r scripts/finnlp_pipeline/requirements-finnlp.txt` e
 > `.venv/bin/python scripts/classificar_noticias.py --llm`
 
 **Testes:** `cd services/prisma-api && ../../.venv/bin/python -m pytest tests/ -v`
-(247 testes, 241 passam/6 skip, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
-`cd apps/web && ./node_modules/.bin/vitest run` (11 testes) ·
+(238 testes aprovados/6 skip, banco `prisma_test` — ver `docker-compose.dev.yml`) ·
+`cd apps/web && ./node_modules/.bin/vitest run` (12 testes) ·
 `cd apps/web && ./node_modules/.bin/tsc --noEmit`
 
 ## Roteiro de demo (~5 min)
