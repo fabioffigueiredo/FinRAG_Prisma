@@ -3,6 +3,8 @@
 pro racional completo (pesquisa CVM/BACEN incluída). Cada bloco de teste
 corresponde a uma categoria do catálogo.
 """
+import pytest
+
 import agent
 from fastapi.testclient import TestClient
 
@@ -168,15 +170,17 @@ def test_pergunta_periodo_fora_do_disponivel_avisa_em_vez_de_inventar():
     assert out["resposta"]
 
 
-# --- J. Caracterização: rotas de análise são públicas hoje (por design) ----
+# --- J. Rotas cognitivas exigem sessão (antes eram públicas) ------------
 
-def test_analisar_responde_sem_sessao_hoje_caracterizacao():
-    """Não é bug — POC com dados fictícios, demonstrável sem login (ver
-    docs/GOVERNANCA_IA.md §7). Este teste existe pra pegar uma REGRESSÃO
-    futura (alguém adiciona auth só numa rota irmã e quebra a consistência),
-    não pra validar que isso é desejável em produção com dado real."""
+@pytest.mark.parametrize("rota", ["/analisar", "/perguntar", "/narrativa", "/ingerir"])
+def test_rotas_cognitivas_exigem_sessao(rota):
+    """Antes este teste caracterizava as rotas como públicas. Mudou de
+    propósito: com uma chave Groq válida em produção, rota pública = qualquer
+    bot da internet consumindo a cota (os logs da VPS mostram varredura
+    constante). O teste segue pegando a regressão de consistência: as quatro
+    rotas irmãs precisam se comportar igual."""
     import app as app_module
     with TestClient(app_module.app) as client:
-        resp = client.post("/analisar", json={"pergunta": "qual foi a rentabilidade?",
-                                              "backend": "mock", "fundo": "ALFA-33"})
-        assert resp.status_code != 401 and resp.status_code != 403
+        resp = client.post(rota, json={"pergunta": "qual foi a rentabilidade?", "csv": "a,b",
+                                       "backend": "mock", "fundo": "ALFA-33"})
+        assert resp.status_code in (401, 403)

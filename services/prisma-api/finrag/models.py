@@ -58,11 +58,37 @@ def _to_openai_messages(messages: list) -> list:
 class GroqClient:
     """Decidi encapsular o Groq em uma classe porque notei que precisava de abstração para swapear com GPT4All sem quebrar o pipeline."""
 
-    def __init__(self, model: str = "llama-3.1-8b-instant",
+    # Folga para os tokens de raciocínio dos modelos gpt-oss: eles contam no
+    # limite de saída, então um max_tokens=220 "puro" devolvia resposta vazia.
+    _FOLGA_RACIOCINIO = 1024
+
+    def __init__(self, model: str = "openai/gpt-oss-20b",
                  api_key: "str | None" = None) -> None:
         from groq import Groq
         self.model = model
-        self._client = Groq(api_key=api_key or os.environ.get("GROQ_API_KEY"))
+        self._client = Groq(api_key=api_key or os.environ.get("GROQ_API_KEY"),
+                            timeout=60.0, max_retries=1)
+        self.ultimo_uso_tokens = 0
+        self.tokens_acumulados = 0
+
+    def _raciocina(self) -> bool:
+        return self.model.startswith("openai/gpt-oss")
+
+    def _params_modelo(self, max_tokens: "int | None") -> dict:
+        """Decidi isolar os parâmetros por família de modelo porque notei que
+        gpt-oss aceita reasoning_effort/include_reasoning e os Llama antigos não."""
+        if not self._raciocina():
+            return {} if max_tokens is None else {"max_tokens": max_tokens}
+        params = {"reasoning_effort": os.environ.get("PRISMA_GROQ_REASONING", "low"),
+                  "include_reasoning": False}
+        if max_tokens is not None:
+            params["max_completion_tokens"] = max_tokens + self._FOLGA_RACIOCINIO
+        return params
+
+    def _registrar_uso(self, resp) -> None:
+        uso = getattr(resp, "usage", None)
+        self.ultimo_uso_tokens = int(getattr(uso, "total_tokens", 0) or 0)
+        self.tokens_acumulados += self.ultimo_uso_tokens
 
     def generate(self, prompt: str, *, temperature: float = 0.0,
                  max_tokens: int = 512) -> str:
@@ -70,19 +96,25 @@ class GroqClient:
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=temperature,
-            max_tokens=max_tokens,
+            **self._params_modelo(max_tokens),
         )
+        self._registrar_uso(resp)
         return resp.choices[0].message.content or ""
 
     def chat(self, messages: list, tools: "list | None" = None,
              *, temperature: float = 0.0) -> dict:
         """Uma rodada de chat com tool-calling (Groq é OpenAI-compatível).
         Retorna forma normalizada: {'content': str, 'tool_calls': [{id,name,arguments}]}."""
-        kwargs = dict(model=self.model, messages=_to_openai_messages(messages), temperature=temperature)
+        # Limite explícito por rodada (com folga de raciocínio no gpt-oss):
+        # sem ele uma rodada podia gastar tudo pensando e voltar vazia.
+        kwargs = dict(model=self.model, messages=_to_openai_messages(messages), temperature=temperature,
+                      **self._params_modelo(1024))
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
-        msg = self._client.chat.completions.create(**kwargs).choices[0].message
+        resp = self._client.chat.completions.create(**kwargs)
+        self._registrar_uso(resp)
+        msg = resp.choices[0].message
         calls = []
         for tc in (msg.tool_calls or []):
             try:

@@ -3,14 +3,18 @@
 Conjunto de golden queries: pergunta -> fonte esperada no top-k. Roda contra a
 API no ar (localhost:8000). Publica a tabela no README (docs/METRICAS_RAG.md).
 
-Uso: python scripts/avaliar_rag.py
+Uso: PRISMA_TOKEN=<jwt de um usuário de teste> python scripts/avaliar_rag.py
+
+Desde out/2026 /perguntar exige autenticação. O script manda o token como
+`Authorization: Bearer` (sem cookie, então não precisa de CSRF).
 """
 from __future__ import annotations
 
 import json
+import os
 import urllib.request
 
-API = "http://localhost:8000/perguntar"
+API = os.environ.get("PRISMA_API", "http://localhost:8000") + "/perguntar"
 K = 4
 
 GOLDEN = [
@@ -27,7 +31,10 @@ GOLDEN = [
 
 def _fontes(pergunta: str) -> list[str]:
     body = json.dumps({"pergunta": pergunta, "backend": "mock", "fundo": "ALFA-33"}).encode()
-    req = urllib.request.Request(API, data=body, headers={"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"}
+    if os.environ.get("PRISMA_TOKEN"):
+        headers["Authorization"] = f"Bearer {os.environ['PRISMA_TOKEN']}"
+    req = urllib.request.Request(API, data=body, headers=headers)
     with urllib.request.urlopen(req, timeout=60) as r:
         d = json.loads(r.read())
     return [c["fonte"] for c in d.get("citacoes", [])]

@@ -91,7 +91,7 @@ docs/                  deck de pitch (HTML), arquitetura, riscos, negócio, segu
 
 **A IA é flexível — local ou via chave de API.** Três backends selecionáveis na UI:
 - **Local (Ollama)** — modelo de texto e embedding configuráveis · 100% privado/offline;
-- **Nuvem (Groq)** — `llama-3.1-8b-instant` · baixa latência (basta `GROQ_API_KEY`);
+- **Nuvem (Groq)** — `openai/gpt-oss-120b` (ajustável por `PRISMA_GROQ_MODEL`) · baixa latência (basta `GROQ_API_KEY`);
 - **Demo (mock)** — determinístico, roda sem nada.
 
 O backend é pluggável (`get_llm`): qualquer endpoint OpenAI-compatível entra com
