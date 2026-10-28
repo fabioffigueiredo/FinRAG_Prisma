@@ -33,11 +33,20 @@ services:
       # base do link de ativação de conta (/ativar-conta/{token}) — sem isso
       # cai no default de dev (localhost:3100), quebrando o link no e-mail
       PRISMA_WEB_URL: https://wiki.ioi.ia.br/prisma
-      # Radar fica desabilitado até o conjunto PT/EN revisado e o benchmark
-      # comparativo serem aprovados. Não há classificação silenciosa em produção.
-      PRISMA_RADAR_REFRESH_ON_STARTUP: "0"
-      PRISMA_RADAR_REFRESH_ENABLED: "0"
+      # Coleta de manchetes LIGADA (feed ao vivo, não classificado, em
+      # /radar/feed). O SINAL de sentimento continua desligado até o conjunto
+      # PT/EN revisado e o benchmark serem aprovados (decisão de 31/08/2026).
+      PRISMA_RADAR_REFRESH_ON_STARTUP: "1"
+      PRISMA_RADAR_REFRESH_ENABLED: "1"
+      PRISMA_RADAR_REFRESH_MINUTES: "10"
       PRISMA_RADAR_SENTIMENT_ENABLED: "0"
+      # Modelos Groq: llama-3.3-70b/3.1-8b foram desligados no plano gratuito
+      # em 16/08/2026. Trocar aqui se o Groq retirar estes também.
+      PRISMA_GROQ_MODEL: openai/gpt-oss-120b
+      PRISMA_GROQ_MODEL_LEVE: openai/gpt-oss-20b
+      # Cota por usuário (protege o limite diário de tokens da organização).
+      PRISMA_COTA_RPM: "8"
+      PRISMA_COTA_TOKENS_DIA: "60000"
     ports:
       - "127.0.0.1:8000:8000"             # exposto só ao localhost; proxy reverso faz o resto
     networks: [prisma-net]

@@ -4,6 +4,9 @@ O Radar é um experimento de contexto de notícias. Não produz recomendação, 
 
 ## Estado atual
 
+**Atualização 28/10/2026:** a coleta de manchetes voltou a rodar em produção, a cada 10 minutos, e o gestor vê as manchetes ao vivo em `/radar/feed` (página Radar, seção "Manchetes ao vivo"). Elas aparecem rotuladas como **não classificadas — sem sinal**. O agregado (`/radar`), os sinais (`/sinais`) e a ferramenta de sinais do copiloto continuam em falha fechada: só entra notícia classificada localmente com confiança suficiente, e o classificador segue desligado até o gate abaixo.
+
+
 O pipeline está implementado, mas a classificação automática está desabilitada no ambiente hospedado. O modelo candidato é `Kenpache/finbert-multilingual-v2` na revisão `d6a74c217b67aadca64851af2db86514074d25a6`. Um carregamento local e inferência de fumaça verificaram a integração técnica. Isso não é uma validação de qualidade.
 
 ## Gate de promoção

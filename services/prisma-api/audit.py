@@ -29,6 +29,7 @@ def _registrar_no_banco(reg: dict) -> bool:
                 resposta_hash=reg["resposta_hash"],
                 extra_json=json.dumps(reg["extra"], ensure_ascii=False) if reg.get("extra") else None,
                 ator_matricula=(reg.get("extra") or {}).get("ator_matricula"),
+                gestora_id=(reg.get("extra") or {}).get("gestora_id"),
             ))
             db.commit()
             return True
@@ -38,7 +39,8 @@ def _registrar_no_banco(reg: dict) -> bool:
         return False
 
 
-def _ler_do_banco(limit: int, ator_matricula: "str | None" = None) -> "list[dict] | None":
+def _ler_do_banco(limit: int, ator_matricula: "str | None" = None,
+                  gestora_id: "int | None" = None) -> "list[dict] | None":
     try:
         from sqlalchemy import select
         from db.models import AuditoriaEvento
@@ -48,6 +50,8 @@ def _ler_do_banco(limit: int, ator_matricula: "str | None" = None) -> "list[dict
             query = select(AuditoriaEvento).order_by(AuditoriaEvento.criado_em.desc()).limit(limit)
             if ator_matricula is not None:
                 query = query.where(AuditoriaEvento.ator_matricula == ator_matricula)
+            if gestora_id is not None:
+                query = query.where(AuditoriaEvento.gestora_id == gestora_id)
             eventos = db.scalars(query)
             return [
                 {
@@ -89,9 +93,10 @@ def registrar(*, rota: str, fundo: str, pergunta: str, backend: str,
         pass  # auditoria nunca derruba a resposta (log-and-continue)
 
 
-def ler(limit: int = 50, ator_matricula: "str | None" = None) -> list[dict]:
+def ler(limit: int = 50, ator_matricula: "str | None" = None,
+        gestora_id: "int | None" = None) -> list[dict]:
     if not _FORCAR_ARQUIVO:
-        do_banco = _ler_do_banco(limit, ator_matricula=ator_matricula)
+        do_banco = _ler_do_banco(limit, ator_matricula=ator_matricula, gestora_id=gestora_id)
         if do_banco is not None:
             return do_banco
     try:
@@ -106,15 +111,18 @@ def ler(limit: int = 50, ator_matricula: "str | None" = None) -> list[dict]:
             continue
         if ator_matricula is not None and evento.get("ator_matricula") != ator_matricula:
             continue
+        if gestora_id is not None and evento.get("gestora_id") != gestora_id:
+            continue
         out.append(evento)
     return out[::-1]
 
 
 def registrar_evento(*, rota: str, ator_matricula: str, descricao: str,
-                     extra: dict | None = None) -> None:
+                     extra: dict | None = None, gestora_id: "int | None" = None) -> None:
     """Sibling de `registrar()` pra eventos de auth/admin — sem fundo, sem
     backend LLM, sem citações. Reaproveita o mesmo armazenamento (Postgres
     com fallback JSONL); é isso que faz `historico_acessos` funcionar."""
     registrar(rota=rota, fundo="-", pergunta=descricao, backend="-",
               latency_ms=0, fontes=[], bloqueados=[], resposta="",
-              extra={**(extra or {}), "ator_matricula": ator_matricula})
+              extra={**(extra or {}), "ator_matricula": ator_matricula,
+                     **({"gestora_id": gestora_id} if gestora_id is not None else {})})

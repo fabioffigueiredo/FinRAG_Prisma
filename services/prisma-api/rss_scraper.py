@@ -6,26 +6,30 @@ adaptada porque o Prisma tem venv própria e não depende do app FinNLP.
 from __future__ import annotations
 import logging
 import re
-import socket
 from datetime import UTC, datetime
 from typing import Any
 
 import feedparser
+import requests
 
 _log = logging.getLogger(__name__)
 _HTML = re.compile(r"<[^>]+>")
 _TIMEOUT_SEGUNDOS = 5
+_USER_AGENT = "PrismaRadar/1.0 (+https://wiki.ioi.ia.br/prisma)"
 
-# Feeds RSS bilíngues — EN (Reuters, Financial Times, MarketWatch) + PT
-# (CNN Brasil, Agência Brasil, Infomoney, Valor), mesma lista do FinNLP.
+# Feeds RSS bilíngues EN + PT. Revisados em 28/10/2026: Reuters e Agência
+# Brasil não resolvem mais DNS, CNN Brasil/economia dá 404 e o endereço antigo
+# do Valor dá 400 — trocados por endereços que respondem (Valor via pox.globo)
+# e por portais financeiros com RSS público ativo.
 RSS_FEEDS: dict[str, str] = {
-    "Reuters":         "https://feeds.reuters.com/reuters/businessNews",
-    "Financial Times": "https://www.ft.com/rss/home",
-    "CNN Brasil":      "https://www.cnnbrasil.com.br/economia/feed/",
-    "MarketWatch":     "https://feeds.marketwatch.com/marketwatch/topstories/",
-    "Agência Brasil":  "https://agenciabrasil.ebc.gov.br/economia/feed",
+    "Financial Times": "https://www.ft.com/rss/home/international",
+    "MarketWatch":     "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    "CNBC":            "https://www.cnbc.com/id/100003114/device/rss/rss.html",
     "Infomoney":       "https://www.infomoney.com.br/feed/",
-    "Valor":           "https://valor.globo.com/rss/home/",
+    "Valor":           "https://pox.globo.com/rss/valor/",
+    "Exame":           "https://exame.com/feed/",
+    "Money Times":     "https://www.moneytimes.com.br/feed/",
+    "Investing.com BR": "https://br.investing.com/rss/news.rss",
 }
 
 
@@ -61,30 +65,32 @@ def parse_feed_entries(entries: list[dict], portal: str) -> list[dict[str, Any]]
     return out
 
 
-def fetch_feeds(portals: list[str] | None = None, max_per_feed: int = 15) -> list[dict[str, Any]]:
-    """Busca e parseia os feeds dos portais ativos. Skip silencioso em falha.
+def _baixar(url: str) -> bytes:
+    """Baixa o feed com timeout POR REQUISIÇÃO.
 
-    Decidi limitar o socket a alguns segundos porque notei, rodando contra os
-    feeds reais, que um portal lento sem timeout travava o startup da API por
-    dezenas de segundos — feedparser não tem parâmetro de timeout próprio, só
-    respeita o timeout default do socket.
+    Decidi trocar o socket.setdefaulttimeout por requests com timeout porque
+    notei que o default global valia para o processo inteiro enquanto a
+    coleta rodava — inclusive para as requisições de usuários que a API
+    atendia em paralelo na outra thread.
     """
+    resp = requests.get(url, timeout=_TIMEOUT_SEGUNDOS, headers={"User-Agent": _USER_AGENT})
+    resp.raise_for_status()
+    return resp.content
+
+
+def fetch_feeds(portals: list[str] | None = None, max_per_feed: int = 15) -> list[dict[str, Any]]:
+    """Busca e parseia os feeds dos portais ativos. Skip silencioso em falha."""
     portals = list(RSS_FEEDS.keys()) if portals is None else portals
     results: list[dict] = []
-    timeout_anterior = socket.getdefaulttimeout()
-    socket.setdefaulttimeout(_TIMEOUT_SEGUNDOS)
-    try:
-        for portal in portals:
-            url = RSS_FEEDS.get(portal)
-            if not url:
-                continue
-            try:
-                parsed = feedparser.parse(url)
-                entries = parsed.entries[:max_per_feed]
-                results.extend(parse_feed_entries(entries, portal))
-            except Exception as exc:  # noqa: BLE001 — robustez: nunca derruba a API
-                _log.warning("Feed '%s' falhou: %s", portal, exc)
-    finally:
-        socket.setdefaulttimeout(timeout_anterior)
+    for portal in portals:
+        url = RSS_FEEDS.get(portal)
+        if not url:
+            continue
+        try:
+            parsed = feedparser.parse(_baixar(url))
+            entries = parsed.entries[:max_per_feed]
+            results.extend(parse_feed_entries(entries, portal))
+        except Exception as exc:  # noqa: BLE001 — robustez: nunca derruba a API
+            _log.warning("Feed '%s' falhou: %s", portal, exc)
     _log.info("RSS: %d notícias de %d portais.", len(results), len(portals))
     return results

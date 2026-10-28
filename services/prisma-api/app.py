@@ -10,7 +10,9 @@ backend Ollama (local) e embeddings configuráveis.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import os
 import threading
 import time
@@ -66,7 +68,8 @@ from finrag.embeddings import SemanticIndex              # noqa: E402
 from finrag.guardrails import sanitize_chunks            # noqa: E402
 from finrag.rag import build_augmented_prompt            # noqa: E402
 
-from llm import get_backend, ollama_disponivel, OllamaClient  # noqa: E402
+from llm import get_backend, ollama_disponivel, OllamaClient, registrar_falha, registrar_sucesso, status_texto  # noqa: E402
+import cota                                                   # noqa: E402
 from embed import get_embed_fn                                # noqa: E402
 from escopo import (  # noqa: E402
     pede_recomendacao, tenta_injecao, INSTRUCAO_ESCOPO, RESPOSTA_ESCOPO, RESPOSTA_INJECAO,
@@ -100,6 +103,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["ETag"],  # o polling do feed do Radar lê o ETag
 )
 # Registrados depois do CORS de propósito — no Starlette o middleware
 # registrado PRIMEIRO fica mais externo (envolve todo o resto), então o CORS
@@ -120,6 +124,7 @@ STATE: dict = {
     "radar": {"estado": "indisponivel", "motivo": "ainda não atualizado"},
 }
 _RADAR_STOP = threading.Event()
+_log_radar = logging.getLogger("prisma.radar")
 
 NOMES_FUNDOS = {
     "alfa": "ALFA-33", "beta": "BETA-71", "gama": "GAMA-12",
@@ -170,20 +175,23 @@ def _startup() -> None:
     for fj in sorted(SEED_DIR.glob("fundo_*.json")):
         d = json.loads(fj.read_text(encoding="utf-8"))
         STATE["fundos"][d["fundo"]["codigo"]] = d
-    if os.environ.get("PRISMA_RADAR_REFRESH_ON_STARTUP", "0") == "1":
-        _atualizar_radar()
-    else:
-        STATE["noticias"] = []
-        STATE["radar"] = {
-            "estado": "indisponivel",
-            "motivo": "atualização automática do Radar não habilitada neste ambiente",
-        }
+    coleta_ligada = os.environ.get("PRISMA_RADAR_REFRESH_ENABLED", "0") == "1"
+    _definir_radar([], {
+        "estado": "indisponivel",
+        "motivo": ("aguardando a primeira coleta de manchetes" if coleta_ligada
+                   else "atualização automática do Radar não habilitada neste ambiente"),
+    })
+    _restaurar_radar()
     if ollama_disponivel():
         OllamaClient().warmup()
 
-    if os.environ.get("PRISMA_RADAR_REFRESH_ENABLED", "0") == "1":
+    if coleta_ligada:
+        # Decidi tirar a coleta síncrona do startup porque notei que ela
+        # segurava a API ~10-20s esperando portais lentos. A thread faz a
+        # 1ª coleta já (se REFRESH_ON_STARTUP=1) e depois segue o intervalo.
+        imediata = os.environ.get("PRISMA_RADAR_REFRESH_ON_STARTUP", "0") == "1"
         _RADAR_STOP.clear()
-        threading.Thread(target=_ciclo_radar, name="prisma-radar", daemon=True).start()
+        threading.Thread(target=_ciclo_radar, args=(imediata,), name="prisma-radar", daemon=True).start()
 
 
 @app.on_event("shutdown")
@@ -191,26 +199,97 @@ def _shutdown() -> None:
     _RADAR_STOP.set()
 
 
-def _atualizar_radar() -> None:
-    """Atualiza estado em memória e persiste o lote quando o banco estiver pronto."""
-    noticias, radar_status = refresh()
-    STATE["noticias"] = noticias
-    STATE["radar"] = radar_status
+_RADAR_LOCK_ESTADO = threading.Lock()
+# Chave do pg_advisory_lock da coleta: com mais de um worker/réplica, só um
+# coleta por vez (os outros pulam o ciclo em vez de duplicar o lote).
+_RADAR_ADVISORY_KEY = 7_204_190_031
+
+
+def _definir_radar(noticias: list, radar_status: dict) -> None:
+    """Troca notícias e status juntos — leitores nunca veem metade de cada lote."""
+    with _RADAR_LOCK_ESTADO:
+        STATE["noticias"] = noticias
+        STATE["radar"] = radar_status
+
+
+def _restaurar_radar() -> None:
+    """Depois de um restart, recarrega do Postgres as manchetes recentes em
+    vez de ficar vazio até a próxima coleta."""
     try:
+        from radar import feed_recente
         with SessionLocal() as db:
+            feed = feed_recente(db)
+    except Exception:  # noqa: BLE001 - sem banco, espera a próxima coleta
+        return
+    if feed["itens"]:
+        _definir_radar(feed["itens"], {
+            "estado": "degradado", "atualizado_em": feed["atualizado_em"],
+            "coletadas": len(feed["itens"]), "elegiveis": 0, "modelo": None,
+            "motivo": "sem evidência recente classificada com confiança suficiente",
+        })
+
+
+def _persistir_lote_coletado(noticias: list, radar_status: dict) -> None:
+    """Grava o lote numa sessão curta, depois da coleta de rede."""
+    from radar import podar
+    with SessionLocal() as db:
+        try:
             persistir_lote(db, noticias, radar_status)
-    except Exception:  # noqa: BLE001 - banco não pode apagar o lote em memória
-        STATE["radar"] = {
-            **radar_status,
-            "estado": "degradado",
-            "motivo": "lote não foi persistido; verifique a base de dados",
-        }
+            podar(db, int(os.environ.get("PRISMA_RADAR_RETENCAO_DIAS", "30")))
+        except Exception:  # noqa: BLE001 - banco não pode apagar o lote em memória
+            db.rollback()
+            _definir_radar(noticias, {**radar_status, "estado": "degradado",
+                                      "motivo": "lote não foi persistido; verifique a base de dados"})
 
 
-def _ciclo_radar() -> None:
+def _atualizar_radar() -> None:
+    """Uma coleta, protegida por lock consultivo do Postgres.
+
+    Decidi segurar o lock numa CONEXÃO dedicada (não numa Session) porque
+    notei que o lock consultivo é por conexão: com Session, os commits
+    intermediários devolviam a conexão ao pool e o unlock rodava em outra —
+    o lock ficava órfão e todo ciclo seguinte era pulado para sempre.
+    A coleta de rede (RSS, até ~40 s) roda sem transação aberta.
+    """
+    from sqlalchemy import text
+    from db.session import engine
+    try:
+        conexao = engine.connect()
+    except Exception:  # noqa: BLE001 - sem banco: coleta só em memória
+        noticias, radar_status = refresh()
+        _definir_radar(noticias, {**radar_status, "estado": "degradado",
+                                  "motivo": "lote não foi persistido; verifique a base de dados"})
+        return
+    try:
+        obteve = bool(conexao.execute(text("SELECT pg_try_advisory_lock(:k)"),
+                                      {"k": _RADAR_ADVISORY_KEY}).scalar())
+        conexao.commit()  # encerra a transação; o lock de sessão continua nesta conexão
+        if not obteve:
+            _log_radar.info("Outra instância está coletando; ciclo pulado.")
+            return
+        try:
+            noticias, radar_status = refresh()
+            _definir_radar(noticias, radar_status)
+            _persistir_lote_coletado(noticias, radar_status)
+        finally:
+            conexao.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _RADAR_ADVISORY_KEY})
+            conexao.commit()
+    finally:
+        conexao.close()
+
+
+def _ciclo_radar(imediata: bool = False) -> None:
+    """Loop da coleta. Uma exceção num ciclo não mata a thread — antes, um
+    erro inesperado encerrava o Radar até o próximo restart, em silêncio."""
     intervalo = max(5, int(os.environ.get("PRISMA_RADAR_REFRESH_MINUTES", "30"))) * 60
-    while not _RADAR_STOP.wait(intervalo):
-        _atualizar_radar()
+    espera = 0 if imediata else intervalo
+    while not _RADAR_STOP.wait(espera):
+        try:
+            _atualizar_radar()
+            espera = intervalo
+        except Exception:  # noqa: BLE001
+            _log_radar.exception("Ciclo do Radar falhou; nova tentativa em 60s.")
+            espera = 60
 
 
 class NarrativaReq(BaseModel):
@@ -286,7 +365,7 @@ def _login_com_rate_limit(request: Request, req: LoginReq, response: Response, d
         alvo = candidatos_alvo[0] if len(candidatos_alvo) == 1 else None
         bloqueado = alvo is not None and alvo.bloqueado_ate is not None
         audit.registrar_evento(
-            rota="/auth/login", ator_matricula=req.matricula,
+            rota="/auth/login", ator_matricula=req.matricula, gestora_id=req.gestora_id,
             descricao="login falhou — conta bloqueada" if bloqueado else "login falhou",
             extra={"bloqueado": True} if bloqueado else None,
         )
@@ -299,13 +378,13 @@ def _login_com_rate_limit(request: Request, req: LoginReq, response: Response, d
         # Cookie separado, sem token utilizável: é isso que torna a 2ª etapa
         # obrigatória de verdade, não só uma UX opcional.
         auth.emitir_cookie_pre2fa(response, usuario)
-        audit.registrar_evento(rota="/auth/login", ator_matricula=usuario.matricula,
+        audit.registrar_evento(rota="/auth/login", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                                descricao="login etapa 1/2 — aguardando código 2FA")
         return LoginResp(nome=usuario.nome, papel=usuario.papel.value,
                          gestora_id=usuario.gestora_id, requer_2fa=True)
 
     auth.emitir_cookies_sessao(response, usuario)
-    audit.registrar_evento(rota="/auth/login", ator_matricula=usuario.matricula, descricao="login bem-sucedido")
+    audit.registrar_evento(rota="/auth/login", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id, descricao="login bem-sucedido")
     return LoginResp(token=auth.criar_token(usuario), nome=usuario.nome,
                      papel=usuario.papel.value, gestora_id=usuario.gestora_id)
 
@@ -315,17 +394,19 @@ def logout(request: Request, response: Response):
     # Não exige sessão válida (get_usuario_atual dá 401 nesse caso) — logout
     # sem sessão continua sendo um no-op gracioso. Só tenta decodificar o
     # cookie/Bearer, sem lançar, pra saber quem saiu na auditoria.
-    ator_matricula = None
+    ator_matricula, gestora_ator = None, None
     try:
         token = request.cookies.get(auth.COOKIE_SESSAO)
         if token:
-            ator_matricula = auth.decodificar_token(token)["sub"]
+            claims = auth.decodificar_token(token)
+            ator_matricula, gestora_ator = claims["sub"], claims.get("gestora_id")
     except HTTPException:
         pass
     auth.limpar_cookies_sessao(response)
     auth.limpar_cookie_pre2fa(response)
     if ator_matricula:
-        audit.registrar_evento(rota="/auth/logout", ator_matricula=ator_matricula, descricao="logout")
+        audit.registrar_evento(rota="/auth/logout", ator_matricula=ator_matricula, gestora_id=gestora_ator,
+                               descricao="logout")
     return {"ok": True}
 
 
@@ -361,7 +442,7 @@ def trocar_senha_rota(req: TrocarSenhaReq, usuario: auth.UsuarioAtual = Depends(
     alvo.senha_hash = auth.hash_senha(req.senha_nova)
     alvo.trocar_senha_no_proximo_login = False
     db.commit()
-    audit.registrar_evento(rota="/auth/senha", ator_matricula=usuario.matricula, descricao="senha alterada")
+    audit.registrar_evento(rota="/auth/senha", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id, descricao="senha alterada")
     return {"ok": True}
 
 
@@ -414,7 +495,7 @@ async def upload_avatar(arquivo: UploadFile = File(...),
     alvo = db.get(_Usuario, usuario.id)
     alvo.avatar_url = f"/static/avatars/{matricula_segura}.{extensao}"
     db.commit()
-    audit.registrar_evento(rota="/auth/avatar", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/auth/avatar", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao="avatar atualizado")
     return {"avatar_url": alvo.avatar_url}
 
@@ -471,7 +552,7 @@ def _iniciar_2fa_com_rate_limit(request: Request, req: Iniciar2FAReq, usuario: a
         if not senha_ok:
             bloqueado = alvo.bloqueado_ate is not None
             audit.registrar_evento(
-                rota="/auth/2fa/iniciar", ator_matricula=usuario.matricula,
+                rota="/auth/2fa/iniciar", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                 descricao="step-up de senha falhou — conta bloqueada" if bloqueado else "step-up de senha falhou",
                 extra={"bloqueado": True} if bloqueado else None,
             )
@@ -487,7 +568,7 @@ def _iniciar_2fa_com_rate_limit(request: Request, req: Iniciar2FAReq, usuario: a
     imagem.save(buffer, format="PNG")
     qr_base64 = base64.b64encode(buffer.getvalue()).decode("ascii")
 
-    audit.registrar_evento(rota="/auth/2fa/iniciar", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/auth/2fa/iniciar", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao="2FA — enrollment iniciado")
     return Iniciar2FAResp(otpauth_uri=uri, qr_base64=qr_base64)
 
@@ -524,7 +605,7 @@ def _confirmar_2fa_com_rate_limit(request: Request, req: Confirmar2FAReq,
     alvo.totp_secret_pendente = None
     alvo.totp_ativado = True
     db.commit()
-    audit.registrar_evento(rota="/auth/2fa/confirmar", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/auth/2fa/confirmar", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao="2FA ativado")
     return {"ok": True}
 
@@ -549,13 +630,13 @@ def _verificar_2fa_com_rate_limit(request: Request, req: Verificar2FAReq, respon
 
     usuario = auth.obter_usuario_pre2fa(request, db)
     if not usuario.totp_secret or not pyotp.TOTP(usuario.totp_secret).verify(req.codigo, valid_window=1):
-        audit.registrar_evento(rota="/auth/2fa/verificar", ator_matricula=usuario.matricula,
+        audit.registrar_evento(rota="/auth/2fa/verificar", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                                descricao="código 2FA inválido")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="código inválido")
 
     auth.limpar_cookie_pre2fa(response)
     auth.emitir_cookies_sessao(response, usuario)
-    audit.registrar_evento(rota="/auth/2fa/verificar", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/auth/2fa/verificar", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao="login etapa 2/2 — 2FA confirmado")
     return LoginResp(token=auth.criar_token(usuario), nome=usuario.nome,
                      papel=usuario.papel.value, gestora_id=usuario.gestora_id)
@@ -643,7 +724,7 @@ def _solicitar_cadastro_com_rate_limit(request: Request, req: CadastroReq, db):
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="matrícula já cadastrada")
 
-    audit.registrar_evento(rota="/auth/cadastro", ator_matricula=req.matricula,
+    audit.registrar_evento(rota="/auth/cadastro", ator_matricula=req.matricula, gestora_id=req.gestora_id,
                            descricao="autocadastro solicitado — aguardando aprovação")
     return {"ok": True}
 
@@ -731,7 +812,7 @@ def _ativar_conta_com_rate_limit(request: Request, req: AtivarContaReq, response
     db.commit()
 
     auth.emitir_cookies_sessao(response, alvo)
-    audit.registrar_evento(rota="/auth/ativar-conta", ator_matricula=alvo.matricula, descricao="conta ativada")
+    audit.registrar_evento(rota="/auth/ativar-conta", ator_matricula=alvo.matricula, gestora_id=alvo.gestora_id, descricao="conta ativada")
     return LoginResp(token=auth.criar_token(alvo), nome=alvo.nome, papel=alvo.papel.value,
                      gestora_id=alvo.gestora_id)
 
@@ -780,31 +861,87 @@ def _fund_chunk(f: dict):
     return Chunk(doc_id=f"dados_{cod}", chunk_id=0, text=_resumo_texto(f), source=f"dados:{cod}")
 
 
-def _gerar_seguro(backend: str, prompt: str, rota: str = "", **kw) -> tuple[str, bool]:
-    """Gera texto; se o backend falhar (ex.: Ollama ausente na VPS, timeout de
-    nuvem), degrada para o MockLLM e sinaliza. Nunca deixa a demo cair.
+TEXTO_DEMONSTRACAO = (
+    "(Demonstração — o motor de IA escolhido está indisponível agora; este texto é "
+    "um exemplo fixo, não uma análise do fundo.) No período, o resultado do fundo foi "
+    "sustentado principalmente pelo carrego das estratégias de crédito privado e juros."
+)
 
-    Meta 4: registra a chamada em observability (tokens/custo estimados,
-    latência) — é o único ponto de saída de texto pro /narrativa e
-    /perguntar, então é o lugar certo pra medir sem duplicar em cada rota.
+
+def _gerar_seguro(backend: str, prompt: str, rota: str = "", **kw) -> tuple[str, bool, str, int]:
+    """Gera texto; se o motor falhar (sem chave, modelo retirado, Ollama
+    ausente, timeout) degrada para um texto de demonstração ROTULADO e
+    sinaliza. Devolve (texto, degradado, motor_efetivo, tokens).
+
+    Decidi tratar resposta vazia como falha porque notei que modelos com
+    raciocínio podem gastar todo o limite de saída pensando e devolver "".
     """
     t0 = time.perf_counter()
+    cliente = None
     try:
-        texto = get_backend(backend).generate(prompt, **kw).strip()
-        degradado = False
-    except Exception:
-        from finrag.models import MockLLM
-        texto = MockLLM(
-            "No período, o resultado do fundo foi sustentado principalmente pelo "
-            "carrego das estratégias de crédito privado e juros."
-        ).generate(prompt).strip()
-        degradado = True
+        cliente = get_backend(backend)
+        texto = cliente.generate(prompt, **kw).strip()
+        if not texto:
+            raise RuntimeError("motor devolveu resposta vazia")
+        degradado, motor = False, (backend or "ollama").lower()
+        registrar_sucesso(motor)
+    except Exception as e:  # noqa: BLE001 - qualquer falha vira modo demonstração rotulado
+        registrar_falha((backend or "").lower(), e)
+        texto, degradado, motor = TEXTO_DEMONSTRACAO, True, "demo"
+    # Fora do try: resposta vazia também consumiu tokens no provedor e
+    # precisa contar na cota (senão repetir pedido vazio seria "de graça").
+    tokens = int(getattr(cliente, "ultimo_uso_tokens", 0) or 0)
     latency_ms = int((time.perf_counter() - t0) * 1000)
-    observability.registrar_chamada_llm(
-        backend=("mock" if degradado else backend), modelo=backend, prompt=prompt,
+    evento = observability.registrar_chamada_llm(
+        backend=motor, modelo=backend, prompt=prompt,
         resposta=texto, latency_ms=latency_ms, rota=rota,
     )
-    return texto, degradado
+    if not tokens and not degradado:
+        tokens = evento["tokens_entrada_estimado"] + evento["tokens_saida_estimado"]
+    return texto, degradado, motor, tokens
+
+
+def _fundos_visiveis(usuario: auth.UsuarioAtual) -> dict:
+    """Fundos que este usuário pode consultar nas rotas cognitivas.
+
+    Os fundos carregados do seed formam o catálogo FICTÍCIO da demonstração,
+    compartilhado por todas as gestoras. Decidi esconder um código assim que
+    o banco o atribuir a OUTRA gestora porque notei que as rotas liam o
+    STATE global sem filtro algum — dado real de um tenant vazaria para outro
+    no dia em que um fundo de verdade fosse carregado.
+    """
+    fundos = STATE.get("fundos") or {}
+    donos = _donos_de_fundos()
+    return {c: f for c, f in fundos.items() if donos.get(c) in (None, usuario.gestora_id)}
+
+
+def _donos_de_fundos() -> dict:
+    """codigo -> gestora_id dos fundos que o banco atribui a um tenant."""
+    try:
+        from sqlalchemy import select
+        from db.models import Fundo
+        with SessionLocal() as db:
+            return dict(db.execute(
+                select(Fundo.codigo, Fundo.gestora_id).where(Fundo.gestora_id.is_not(None))
+            ).all())
+    except Exception:  # noqa: BLE001 - sem banco, vale só o catálogo fictício
+        return {}
+
+
+def _fundo_do_usuario(usuario: auth.UsuarioAtual, codigo: str) -> tuple[dict, "dict | None"]:
+    """Resolve o fundo pedido dentro do que o usuário pode ver. Pedido de
+    fundo de outra gestora é 404 (não revela que existe)."""
+    fundos = _fundos_visiveis(usuario)
+    f = fundos.get(codigo)
+    if f is None:
+        # Antes caía no primeiro fundo da lista: a pergunta sobre o fundo X
+        # era respondida com os números do fundo Y, sem aviso.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="fundo não encontrado")
+    return fundos, f
+
+
+def _ator(usuario: auth.UsuarioAtual) -> dict:
+    return {"ator_matricula": usuario.matricula, "gestora_id": usuario.gestora_id}
 
 
 @app.get("/health")
@@ -812,10 +949,7 @@ def health():
     return {
         "status": "ok",
         "embeddings": {"estado": "disponivel", "motor": STATE["embed"]},
-        "texto": {
-            "estado": "disponivel" if os.environ.get("GROQ_API_KEY") or ollama_disponivel() else "degradado",
-            "motor": "groq" if os.environ.get("GROQ_API_KEY") else "ollama" if ollama_disponivel() else "demo",
-        },
+        "texto": status_texto(),
         "radar": STATE["radar"],
         "chunks": len(STATE["index"]._chunks) if STATE["index"] else 0,
     }
@@ -839,13 +973,9 @@ def demo_status():
 
 
 @app.post("/narrativa")
-def narrativa(req: NarrativaReq):
+def narrativa(req: NarrativaReq, usuario: auth.UsuarioAtual = Depends(cota.usuario_ia)):
     t0 = time.perf_counter()
-    fundos = STATE.get("fundos") or {}
-    f = fundos.get(req.fundo) or (next(iter(fundos.values())) if fundos else None)
-    if f is None:
-        return {"texto": "", "citacoes": [], "backend": req.backend,
-                "latency_ms": 0, "erro": "nenhum fundo carregado"}
+    _, f = _fundo_do_usuario(usuario, req.fundo)
     idx = STATE["index"]
     retr = idx.search("atribuição contribuição estratégia alpha beta carrego benchmark", k=3)
     regras = "\n".join(f"[{c.source}] {c.text[:280]}" for c, _ in retr)
@@ -856,29 +986,33 @@ def narrativa(req: NarrativaReq):
         f"NÚMEROS DO FUNDO:\n{_resumo_texto(f)}\n\n"
         f"REGRAS DE ATRIBUIÇÃO (contexto):\n{regras}" + INSTRUCAO_ESCOPO + "\n\nComentário:"
     )
-    texto, degradado = _gerar_seguro(req.backend, prompt, rota="/narrativa", temperature=0.1, max_tokens=220)
+    texto, degradado, motor, tokens = _gerar_seguro(req.backend, prompt, rota="/narrativa",
+                                                    temperature=0.1, max_tokens=220)
+    cota.registrar(usuario, tokens)
     lat = int((time.perf_counter() - t0) * 1000)
     fontes = [c.source for c, _ in retr]
     audit.registrar(rota="/narrativa", fundo=f["fundo"]["codigo"], pergunta="(narrativa do período)",
                     backend=req.backend, latency_ms=lat, fontes=fontes, bloqueados=[],
-                    resposta=texto)
+                    resposta=texto, extra={**_ator(usuario), "motor_efetivo": motor, "degradado": degradado})
     return {
         "texto": texto,
         "citacoes": [{"fonte": c.source, "trecho": c.text[:160].strip(), "score": round(float(s), 3)} for c, s in retr],
         "backend": req.backend,
+        "motor_solicitado": req.backend,
+        "motor_efetivo": motor,
         "latency_ms": lat,
         "degradado": degradado,
     }
 
 
 @app.post("/perguntar")
-def perguntar(req: PerguntaReq):
+def perguntar(req: PerguntaReq, usuario: auth.UsuarioAtual = Depends(cota.usuario_ia)):
     t0 = time.perf_counter()
     if tenta_injecao(req.pergunta):
         audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
                         backend=req.backend, latency_ms=0, fontes=[],
                         bloqueados=["(pergunta) injeção/vazamento"], resposta=RESPOSTA_INJECAO,
-                        extra={"injecao": True})
+                        extra={**_ator(usuario), "injecao": True})
         return {"resposta": RESPOSTA_INJECAO, "citacoes": [],
                 "bloqueados": [{"fonte": "pergunta do usuário",
                                 "motivo": "tentativa de injeção/vazamento de prompt"}],
@@ -886,20 +1020,23 @@ def perguntar(req: PerguntaReq):
     if pede_recomendacao(req.pergunta):
         audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
                         backend=req.backend, latency_ms=0, fontes=[], bloqueados=[],
-                        resposta=RESPOSTA_ESCOPO, extra={"escopo": True})
+                        resposta=RESPOSTA_ESCOPO, extra={**_ator(usuario), "escopo": True})
         return {"resposta": RESPOSTA_ESCOPO, "citacoes": [], "bloqueados": [],
                 "backend": req.backend, "latency_ms": 0, "escopo": True}
 
     idx = STATE["index"]
+    fundos, _ = _fundo_do_usuario(usuario, req.fundo)
     codigos = e_comparativa(req.pergunta) or [req.fundo]
-    fund_chunks = [_fund_chunk(STATE["fundos"][c]) for c in codigos if c in STATE["fundos"]]
+    fund_chunks = [_fund_chunk(fundos[c]) for c in codigos if c in fundos]
 
     retr = idx.search(req.pergunta, k=4)
     scores = {id(c): s for c, s in retr}
     safe, blocked = sanitize_chunks([c for c, _ in retr])
     contexto = fund_chunks + safe
     prompt = build_augmented_prompt(req.pergunta, contexto) + INSTRUCAO_ESCOPO
-    resposta, _deg = _gerar_seguro(req.backend, prompt, rota="/perguntar", temperature=0.1, max_tokens=380)
+    resposta, degradado, motor, tokens = _gerar_seguro(req.backend, prompt, rota="/perguntar",
+                                                       temperature=0.1, max_tokens=380)
+    cota.registrar(usuario, tokens)
     lat = int((time.perf_counter() - t0) * 1000)
     citacoes = [
         {"fonte": c.source, "trecho": c.text[:160].strip(),
@@ -909,18 +1046,22 @@ def perguntar(req: PerguntaReq):
     audit.registrar(rota="/perguntar", fundo=req.fundo, pergunta=req.pergunta,
                     backend=req.backend, latency_ms=lat,
                     fontes=[c["fonte"] for c in citacoes],
-                    bloqueados=[c.source for c in blocked], resposta=resposta)
+                    bloqueados=[c.source for c in blocked], resposta=resposta,
+                    extra={**_ator(usuario), "motor_efetivo": motor, "degradado": degradado})
     return {
         "resposta": resposta,
         "citacoes": citacoes,
         "bloqueados": [{"fonte": c.source, "motivo": "prompt injection detectado pelo guardrail"} for c in blocked],
         "backend": req.backend,
+        "motor_solicitado": req.backend,
+        "motor_efetivo": motor,
         "latency_ms": lat,
+        "degradado": degradado,
     }
 
 
 @app.post("/analisar")
-def analisar_endpoint(req: AnalisarReq):
+def analisar_endpoint(req: AnalisarReq, usuario: auth.UsuarioAtual = Depends(cota.usuario_ia)):
     """Copiloto de análise conversacional: traduz a pergunta em chamadas de
     ferramenta sobre os dados do fundo (POC sobre o seed) e devolve narrativa +
     gráfico(s) + chips de ação. Mesmos guardrails do /perguntar."""
@@ -929,7 +1070,7 @@ def analisar_endpoint(req: AnalisarReq):
         audit.registrar(rota="/analisar", fundo=req.fundo, pergunta=req.pergunta,
                         backend=req.backend, latency_ms=0, fontes=[],
                         bloqueados=["(pergunta) injeção/vazamento"], resposta=RESPOSTA_INJECAO,
-                        extra={"injecao": True})
+                        extra={**_ator(usuario), "injecao": True})
         return {"resposta": RESPOSTA_INJECAO, "consulta_echo": {}, "blocos": [], "acoes": [],
                 "avisos": [], "citacoes": [],
                 "bloqueados": [{"fonte": "pergunta do usuário",
@@ -938,14 +1079,18 @@ def analisar_endpoint(req: AnalisarReq):
     if pede_recomendacao(req.pergunta):
         audit.registrar(rota="/analisar", fundo=req.fundo, pergunta=req.pergunta,
                         backend=req.backend, latency_ms=0, fontes=[], bloqueados=[],
-                        resposta=RESPOSTA_ESCOPO, extra={"escopo": True})
+                        resposta=RESPOSTA_ESCOPO, extra={**_ator(usuario), "escopo": True})
         return {"resposta": RESPOSTA_ESCOPO, "consulta_echo": {}, "blocos": [], "acoes": [],
                 "avisos": [], "citacoes": [], "bloqueados": [],
                 "backend": req.backend, "latency_ms": 0, "escopo": True}
 
-    fundos = STATE.get("fundos") or {}
-    noticias = STATE.get("noticias") or []
-    degradado = False
+    fundos, _ = _fundo_do_usuario(usuario, req.fundo)
+    # Só notícia classificada com confiança entra no raciocínio do agente;
+    # manchete crua do feed não é evidência de sinal (falha fechada de 31/08).
+    with _RADAR_LOCK_ESTADO:
+        noticias = [n for n in (STATE.get("noticias") or []) if n.get("elegivel_agregado")]
+    degradado, motor, tokens = False, (req.backend or "ollama").lower(), 0
+    cliente = None
     try:
         cliente = get_backend(req.backend)
         if hasattr(cliente, "chat"):
@@ -954,20 +1099,27 @@ def analisar_endpoint(req: AnalisarReq):
         else:
             resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos,
                                              noticias=noticias, pergunta=req.pergunta)
-            degradado = True
-    except Exception:
+            degradado, motor = True, "demo"
+        if not degradado and not (resultado.get("resposta") or "").strip():
+            raise RuntimeError("motor devolveu resposta vazia")
+        if not degradado:
+            registrar_sucesso(motor)
+    except Exception as e:  # noqa: BLE001 - falha do motor vira demonstração rotulada
+        registrar_falha(motor, e)
         resultado = agente.analisar_mock(fundo_ativo=req.fundo, fundos=fundos,
                                          noticias=noticias, pergunta=req.pergunta)
-        degradado = True
+        degradado, motor = True, "demo"
+    tokens = int(getattr(cliente, "tokens_acumulados", 0) or 0)
+    cota.registrar(usuario, tokens)
 
     lat = int((time.perf_counter() - t0) * 1000)
     audit.registrar(rota="/analisar", fundo=req.fundo, pergunta=req.pergunta,
                     backend=req.backend, latency_ms=lat,
                     fontes=[t["tool"] for t in resultado.get("tool_trace", [])],
                     bloqueados=[], resposta=resultado["resposta"],
-                    extra={"consulta_echo": resultado.get("consulta_echo"),
+                    extra={**_ator(usuario), "consulta_echo": resultado.get("consulta_echo"),
                            "tool_trace": resultado.get("tool_trace"),
-                           "degradado": degradado})
+                           "motor_efetivo": motor, "degradado": degradado})
     return {
         "resposta": resultado["resposta"],
         "consulta_echo": resultado.get("consulta_echo", {}),
@@ -977,13 +1129,15 @@ def analisar_endpoint(req: AnalisarReq):
         "citacoes": [],
         "bloqueados": [],
         "backend": req.backend,
+        "motor_solicitado": req.backend,
+        "motor_efetivo": motor,
         "latency_ms": lat,
         "degradado": degradado,
     }
 
 
 @app.post("/ingerir")
-def ingerir(req: IngestReq):
+def ingerir(req: IngestReq, _usuario: auth.UsuarioAtual = Depends(cota.usuario_com_csrf)):
     """Modo standalone: ingere um export (CSV) de contribuições e devolve o resumo.
     Prova o adaptador de arquivo — mesma leitura sem backend ao vivo."""
     estrategias = _parse_csv_contribuicoes(req.csv)
@@ -1005,13 +1159,58 @@ def ingerir(req: IngestReq):
     }
 
 
+@app.get("/radar/feed")
+def radar_feed(request: Request, response: Response,
+               _usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual)):
+    """Manchetes ao vivo, NÃO classificadas. Contrato separado do /radar
+    (agregado/sinal), que continua em falha fechada (decisão de 31/08).
+    ETag permite polling barato: sem lote novo, 304 sem corpo."""
+    from radar import feed_recente
+    try:
+        with SessionLocal() as db:
+            feed = feed_recente(db)
+        fonte = "banco"
+    except Exception:  # noqa: BLE001 - sem banco, serve o último lote em memória
+        with _RADAR_LOCK_ESTADO:
+            itens = [n for n in (STATE.get("noticias") or []) if n.get("relevante")]
+            atualizado = (STATE.get("radar") or {}).get("atualizado_em")
+        feed = {"itens": itens, "lote_id": None, "atualizado_em": atualizado, "lotes": 0}
+        fonte = "memoria"
+    etag = '"' + hashlib.sha256(
+        f"{feed['atualizado_em']}|{len(feed['itens'])}|{feed['itens'][0]['fingerprint'] if feed['itens'] else ''}"
+        .encode()).hexdigest()[:20] + '"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = "private, no-cache"
+    with _RADAR_LOCK_ESTADO:
+        status_radar = dict(STATE.get("radar") or {})
+    itens = [{k: n[k] for k in ("id", "titulo", "link", "portal", "publicada_em", "coletada_em")}
+             for n in feed["itens"]]
+    return {
+        "ok": bool(itens),
+        "itens": itens,
+        "classificacao": "nao_classificado",
+        "aviso": "Manchetes públicas sem classificação de sentimento. Não são sinal nem recomendação.",
+        "atualizado_em": feed["atualizado_em"],
+        "coleta": "ligada" if os.environ.get("PRISMA_RADAR_REFRESH_ENABLED", "0") == "1" else "desligada",
+        "motivo": None if itens else status_radar.get("motivo"),
+        "fonte": fonte,
+    }
+
+
 @app.get("/radar")
 def radar_endpoint():
-    noticias = STATE.get("noticias") or []
-    status_radar = STATE.get("radar") or {}
+    """Agregado de sentimento (o "sinal"). Falha fechada: só entra notícia
+    classificada localmente com confiança suficiente — o feed cru de
+    manchetes vive em /radar/feed."""
+    with _RADAR_LOCK_ESTADO:
+        todas = list(STATE.get("noticias") or [])
+        status_radar = dict(STATE.get("radar") or {})
+    noticias = [n for n in todas if n.get("elegivel_agregado")]
     agregado = agregar(noticias)
     return {
-        "ok": bool(noticias),
+        "ok": bool(agregado),
         "noticias": noticias,
         "agregado": agregado,
         "estado": status_radar.get("estado", "indisponivel"),
@@ -1023,11 +1222,13 @@ def radar_endpoint():
 
 
 @app.get("/sinais")
-def sinais_endpoint(fundo: str = "ALFA-33"):
-    """Alertas probabilísticos de apoio à decisão (modelo de regras auditável)."""
-    fundos = STATE.get("fundos") or {}
-    f = fundos.get(fundo) or (next(iter(fundos.values())) if fundos else None)
-    noticias = [n for n in (STATE.get("noticias") or []) if n.get("elegivel_agregado")]
+def sinais_endpoint(fundo: str = "ALFA-33",
+                    usuario: auth.UsuarioAtual = Depends(auth.get_usuario_atual)):
+    """Alertas probabilísticos de apoio à decisão (modelo de regras auditável).
+    Mesmo isolamento por gestora das rotas cognitivas (404 se não for seu)."""
+    _, f = _fundo_do_usuario(usuario, fundo)
+    with _RADAR_LOCK_ESTADO:
+        noticias = [n for n in (STATE.get("noticias") or []) if n.get("elegivel_agregado")]
     agregado = agregar(noticias)
     if not f or not noticias or not agregado:
         return {
@@ -1040,11 +1241,12 @@ def sinais_endpoint(fundo: str = "ALFA-33"):
     return {"ok": True, "sinais": sinais, "aviso": AVISO_LEGAL, "modelo": MODELO_VERSAO}
 
 
-@app.get("/auditoria", dependencies=[Depends(auth.exigir_papel("gestor", "compliance"))])
-def auditoria(limit: int = 50):
-    """RBAC reativado — o frontend já tem login de verdade (cookie de
-    sessão + middleware/admin gate). Só gestor/compliance auditam."""
-    return {"ok": True, "consultas": audit.ler(limit=limit)}
+@app.get("/auditoria")
+def auditoria(limit: int = 50,
+              usuario: auth.UsuarioAtual = Depends(auth.exigir_papel("gestor", "compliance"))):
+    """Só gestor/compliance auditam, e só a PRÓPRIA gestora — antes a
+    leitura era global e um gestor da gestora A via perguntas da B."""
+    return {"ok": True, "consultas": audit.ler(limit=limit, gestora_id=usuario.gestora_id)}
 
 
 @app.get("/fundos")
@@ -1147,7 +1349,7 @@ def criar_usuario_rota(req: CriarUsuarioReq, usuario: auth.UsuarioAtual = Depend
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="matrícula já cadastrada")
-    audit.registrar_evento(rota="/usuarios", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/usuarios", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao=f"usuário criado: {novo.matricula}")
     return _usuario_resp(novo)
 
@@ -1228,7 +1430,7 @@ def aprovar_cadastro_rota(usuario_id: int, req: AprovarReq = AprovarReq(),
     link = _link_ativacao(token)
     email_enviado = _convite.enviar_email_ativacao(alvo.email, alvo.nome, link) if alvo.email else False
 
-    audit.registrar_evento(rota="/usuarios/aprovar", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/usuarios/aprovar", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao=f"cadastro aprovado: {alvo.matricula}")
     return AprovarResp(link_ativacao=link, email_enviado=email_enviado)
 
@@ -1265,7 +1467,7 @@ def reenviar_convite_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(
     link = _link_ativacao(token)
     email_enviado = _convite.enviar_email_ativacao(alvo.email, alvo.nome, link) if alvo.email else False
 
-    audit.registrar_evento(rota="/usuarios/reenviar-convite", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/usuarios/reenviar-convite", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao=f"convite reemitido: {alvo.matricula}")
     return AprovarResp(link_ativacao=link, email_enviado=email_enviado)
 
@@ -1292,7 +1494,7 @@ def rejeitar_cadastro_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends
     db.commit()
     if alvo.email:
         _convite.enviar_email_rejeicao(alvo.email, alvo.nome)
-    audit.registrar_evento(rota="/usuarios/rejeitar", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/usuarios/rejeitar", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao=f"cadastro rejeitado: {alvo.matricula}")
     return {"ok": True}
 
@@ -1346,7 +1548,7 @@ def criar_convite_rota(req: CriarConviteReq, usuario: auth.UsuarioAtual = Depend
     link = _link_ativacao(token)
     email_enviado = _convite.enviar_email_ativacao(novo.email, novo.nome, link) if novo.email else False
 
-    audit.registrar_evento(rota="/usuarios/convite", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/usuarios/convite", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao=f"convite enviado: {novo.matricula}")
     return AprovarResp(link_ativacao=link, email_enviado=email_enviado)
 
@@ -1404,7 +1606,7 @@ def atualizar_usuario_rota(usuario_id: int, req: AtualizarUsuarioReq,
     atualizado = atualizar_usuario(db, alvo, **campos)
     db.commit()
     if req.trocar_senha_no_proximo_login:
-        audit.registrar_evento(rota="/usuarios", ator_matricula=usuario.matricula,
+        audit.registrar_evento(rota="/usuarios", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                                descricao=f"força troca de senha no próximo login: {alvo.matricula}")
     return _usuario_resp(atualizado)
 
@@ -1427,7 +1629,7 @@ def revogar_sessao_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(au
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
     alvo.sessao_revogada_em = datetime.now(timezone.utc)
     db.commit()
-    audit.registrar_evento(rota="/usuarios/revogar-sessao", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/usuarios/revogar-sessao", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao=f"sessão revogada: {alvo.matricula}")
     return {"ok": True}
 
@@ -1454,7 +1656,7 @@ def resetar_2fa_rota(usuario_id: int, usuario: auth.UsuarioAtual = Depends(auth.
     alvo.totp_ativado = False
     alvo.totp_secret_pendente = None
     db.commit()
-    audit.registrar_evento(rota="/usuarios/resetar-2fa", ator_matricula=usuario.matricula,
+    audit.registrar_evento(rota="/usuarios/resetar-2fa", ator_matricula=usuario.matricula, gestora_id=usuario.gestora_id,
                            descricao=f"2FA resetado: {alvo.matricula}")
     return {"ok": True}
 
@@ -1470,4 +1672,5 @@ def historico_acessos_rota(usuario_id: int, limit: int = 20,
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="usuário não encontrado")
     if alvo.gestora_id != usuario.gestora_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="usuário de outra gestora")
-    return {"ok": True, "eventos": audit.ler(limit=limit, ator_matricula=alvo.matricula)}
+    return {"ok": True, "eventos": audit.ler(limit=limit, ator_matricula=alvo.matricula,
+                                             gestora_id=alvo.gestora_id)}

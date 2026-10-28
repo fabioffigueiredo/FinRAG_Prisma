@@ -6,7 +6,17 @@ const BASE = process.env.NEXT_PUBLIC_PRISMA_API ?? "http://localhost:8000";
 
 export type Citacao = { fonte: string; trecho: string; score?: number };
 
-export type NarrativaResp = {
+/** Campos de honestidade do motor que toda rota cognitiva devolve. */
+type MotorInfo = {
+  motor_solicitado?: string;
+  motor_efetivo?: string;
+  /** true = o motor pedido falhou e o texto é a demonstração fixa rotulada. */
+  degradado?: boolean;
+  /** Mensagem para o usuário quando a chamada nem chegou a responder (401/429/rede). */
+  erro?: string;
+};
+
+export type NarrativaResp = MotorInfo & {
   texto: string;
   citacoes: Citacao[];
   backend: string;
@@ -14,7 +24,7 @@ export type NarrativaResp = {
   fallback?: boolean;
 };
 
-export type PerguntaResp = {
+export type PerguntaResp = MotorInfo & {
   resposta: string;
   citacoes: Citacao[];
   bloqueados: { fonte: string; motivo: string }[];
@@ -34,7 +44,7 @@ export type Acao = { label: string; prompt: string };
 
 export type ConsultaEcho = { fundo?: string; periodo?: string; benchmark?: string; dimensao?: string };
 
-export type AnaliseResp = {
+export type AnaliseResp = MotorInfo & {
   resposta: string;
   consulta_echo: ConsultaEcho;
   blocos: BlocoGrafico[];
@@ -47,20 +57,34 @@ export type AnaliseResp = {
   fallback?: boolean;
   escopo?: boolean;
   injecao?: boolean;
-  degradado?: boolean;
 };
 
-async function post<T>(path: string, body: unknown, fallback: T): Promise<T> {
+/** Traduz o status HTTP para uma mensagem que o gestor entende. */
+export function mensagemErroApi(status: number, detalhe?: unknown): string {
+  if (status === 401) return "Sua sessão expirou. Entre de novo para continuar.";
+  if (status === 403) return "Não foi possível validar a requisição. Recarregue a página e tente de novo.";
+  if (status === 429) return typeof detalhe === "string" ? detalhe : "Limite de uso da IA atingido. Tente mais tarde.";
+  if (status === 404) return "Fundo não encontrado para o seu usuário.";
+  return `A API respondeu com erro (HTTP ${status}). Tente de novo em instantes.`;
+}
+
+/** POST autenticado (cookie de sessão + CSRF). Em erro, devolve `vazio`
+ * marcado com `erro` — nunca um texto inventado que pareça resposta real. */
+async function post<T>(path: string, body: unknown, vazio: T): Promise<T> {
   try {
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: headersComCsrf(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const corpo = (await res.json().catch(() => ({}))) as { detail?: unknown };
+      return { ...vazio, fallback: true, erro: mensagemErroApi(res.status, corpo.detail) } as T;
+    }
     return (await res.json()) as T;
   } catch {
-    return { ...fallback, fallback: true } as T;
+    return { ...vazio, fallback: true, erro: "Sem conexão com a API. Verifique a rede e tente de novo." } as T;
   }
 }
 
@@ -78,8 +102,10 @@ export const NARRATIVA_FALLBACK: NarrativaResp = {
 
 export function gerarNarrativa(backend: Backend, fundo: string): Promise<NarrativaResp> {
   return post<NarrativaResp>("/narrativa", { fundo, backend }, {
-    ...NARRATIVA_FALLBACK,
+    texto: "",
+    citacoes: [],
     backend,
+    latency_ms: 0,
   });
 }
 
@@ -97,13 +123,19 @@ export async function ingerir(nome: string, csv: string): Promise<IngestResp> {
   try {
     const res = await fetch(`${BASE}/ingerir`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: headersComCsrf(),
       body: JSON.stringify({ nome, csv }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      // Erro de sessão/permissão/servidor é erro — não vira "ok" com leitura local.
+      const corpo = (await res.json().catch(() => ({}))) as { detail?: unknown };
+      return { ok: false, erro: mensagemErroApi(res.status, corpo.detail) };
+    }
     return (await res.json()) as IngestResp;
   } catch {
-    // fallback: parseia o CSV no cliente (demo resiliente sem API)
+    // Só sem conexão com a API: lê o CSV no navegador, marcado como
+    // fallback ("leitura local" na tela).
     return parseCsvLocal(nome, csv);
   }
 }
@@ -140,17 +172,7 @@ export function perguntar(pergunta: string, backend: Backend, fundo?: string): P
   return post<PerguntaResp>(
     "/perguntar",
     { pergunta, backend, fundo },
-    {
-      resposta:
-        "Com base nos trechos recuperados: o resultado do fundo no período foi sustentado sobretudo pelo carrego das estratégias de Crédito Privado e Juros Brasil, que juntas somaram +2,40 pp. O beta baixo (0,15) indica que o ganho não veio de exposição ao CDI, e sim de seleção — o que a atribuição registra como alpha (+1,10 pp).",
-      citacoes: [
-        { fonte: "02_taxonomia_estrategias.md", trecho: "Crédito Privado: o retorno vem do carrego (juros acima do CDI) e da variação de spread", score: 0.79 },
-        { fonte: "03_glossario_benchmark.md", trecho: "carrego (posições que rendem acima do CDI) e acertos direcionais", score: 0.71 },
-      ],
-      bloqueados: [],
-      backend,
-      latency_ms: 0,
-    },
+    { resposta: "", citacoes: [], bloqueados: [], backend, latency_ms: 0 },
   );
 }
 
@@ -159,14 +181,10 @@ export function analisar(pergunta: string, backend: Backend, fundo?: string): Pr
     "/analisar",
     { pergunta, backend, fundo },
     {
-      resposta:
-        "(Sem conexão com a API) O Alfa Multimercado rendeu 4,25% no período, ante 3,10% do CDI — excesso de +1,15 pp, puxado por Crédito Privado e Juros Brasil.",
-      consulta_echo: { fundo: fundo ?? "ALFA-33", periodo: "2º trimestre 2026 (abr–jun)", benchmark: "CDI", dimensao: "Estratégia" },
+      resposta: "",
+      consulta_echo: {},
       blocos: [],
-      acoes: [
-        { label: "Comparar Benchmarks", prompt: "Compare o fundo com o Ibovespa e o IMA-B" },
-        { label: "Ver por Grupo Contábil", prompt: "Mostre a atribuição por grupo contábil" },
-      ],
+      acoes: [],
       avisos: [],
       citacoes: [],
       bloqueados: [],
@@ -201,6 +219,57 @@ export type RadarResp = {
   modelo?: string | null;
   motivo?: string | null;
 };
+
+export type Manchete = {
+  id: string;
+  titulo: string;
+  link: string;
+  portal: string;
+  publicada_em: string;
+  coletada_em: string;
+};
+
+export type FeedResp = {
+  ok: boolean;
+  itens: Manchete[];
+  classificacao: "nao_classificado";
+  aviso: string;
+  atualizado_em: string | null;
+  coleta: "ligada" | "desligada";
+  motivo?: string | null;
+  erro?: string;
+  /** Última atualização falhou; a lista exibida é a anterior. */
+  desatualizado?: string;
+};
+
+/** Feed de manchetes ao vivo (não classificadas). Passe o ETag da leitura
+ * anterior: se nada mudou a API responde 304 e devolvemos `null` (mantenha
+ * o que já está na tela). */
+export async function getFeed(etag?: string | null): Promise<{ feed: FeedResp | null; etag: string | null }> {
+  try {
+    const res = await fetch(`${BASE}/radar/feed`, {
+      credentials: "include",
+      cache: "no-store",
+      headers: etag ? { "If-None-Match": etag } : undefined,
+    });
+    if (res.status === 304) return { feed: null, etag: etag ?? null };
+    if (!res.ok) {
+      const corpo = (await res.json().catch(() => ({}))) as { detail?: unknown };
+      return {
+        feed: { ok: false, itens: [], classificacao: "nao_classificado", aviso: "", atualizado_em: null,
+                coleta: "desligada", erro: mensagemErroApi(res.status, corpo.detail) },
+        etag: null,
+      };
+    }
+    return { feed: (await res.json()) as FeedResp, etag: res.headers.get("ETag") };
+  } catch {
+    return {
+      feed: { ok: false, itens: [], classificacao: "nao_classificado", aviso: "", atualizado_em: null,
+              coleta: "desligada", erro: "Sem conexão com a API." },
+      etag: null,
+    };
+  }
+}
 
 export async function getRadar(): Promise<RadarResp> {
   try {
@@ -699,7 +768,7 @@ export type SinaisResp = {
 
 export async function getSinais(fundo: string): Promise<SinaisResp> {
   try {
-    const res = await fetch(`${BASE}/sinais?fundo=${encodeURIComponent(fundo)}`);
+    const res = await fetch(`${BASE}/sinais?fundo=${encodeURIComponent(fundo)}`, { credentials: "include" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as SinaisResp;
   } catch {

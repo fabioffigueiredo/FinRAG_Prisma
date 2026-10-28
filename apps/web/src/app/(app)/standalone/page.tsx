@@ -121,6 +121,19 @@ export default function StandalonePage() {
               </Button>
             </div>
           </motion.div>
+        ) : !res.ok ? (
+          <motion.div
+            key="erro"
+            role="alert"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center gap-2 rounded-lg border border-[var(--destructive)]/40 bg-[var(--destructive)]/10 px-3 py-2 text-sm text-[var(--destructive)]"
+          >
+            {res.erro ?? "Não foi possível ler o arquivo."}
+            <button onClick={() => setRes(null)} className="ml-auto text-xs text-muted-foreground transition-colors hover:text-foreground">
+              tentar de novo
+            </button>
+          </motion.div>
         ) : (
           <motion.div
             key="results"

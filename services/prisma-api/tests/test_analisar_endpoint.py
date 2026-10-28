@@ -15,6 +15,8 @@ from fastapi.testclient import TestClient
 
 import audit
 
+pytestmark = pytest.mark.usefixtures("sessao_ia_falsa")
+
 
 @pytest.fixture(scope="module")
 def client():

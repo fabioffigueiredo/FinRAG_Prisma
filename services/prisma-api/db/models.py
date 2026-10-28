@@ -306,6 +306,10 @@ class AuditoriaEvento(Base):
     # usuário; None em eventos que não têm um usuário logado associado
     # (ex.: tentativa de login com matrícula inexistente).
     ator_matricula: Mapped["str | None"] = mapped_column(String(20), nullable=True, index=True)
+    # Tenant do evento. A matrícula é única só DENTRO da gestora, então
+    # filtrar por matrícula sozinha misturava históricos de gestoras
+    # diferentes. Evento sem gestora (legado/anônimo) não aparece para ninguém.
+    gestora_id: Mapped["int | None"] = mapped_column(nullable=True, index=True)
 
 
 class BenchmarkPeso(Base):
@@ -359,3 +363,18 @@ class RadarNoticia(Base):
     classificador: Mapped["str | None"] = mapped_column(String(220), nullable=True)
     estrategia: Mapped[str] = mapped_column(String(120), default="Mercado geral")
     elegivel_agregado: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class UsoIA(Base):
+    """Consumo diário de IA por usuário. Decidi persistir a cota no Postgres
+    porque notei que o rate limiter em memória/IP do slowapi não impede um
+    único usuário logado de esgotar a cota diária de tokens do Groq."""
+    __tablename__ = "uso_ia"
+    __table_args__ = (UniqueConstraint("usuario_id", "dia", name="uq_uso_ia_usuario_dia"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuario.id", ondelete="CASCADE"), index=True)
+    gestora_id: Mapped[int] = mapped_column(ForeignKey("gestora.id"), index=True)
+    dia: Mapped[date] = mapped_column(Date)
+    requisicoes: Mapped[int] = mapped_column(default=0)
+    tokens: Mapped[int] = mapped_column(default=0)

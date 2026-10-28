@@ -20,7 +20,7 @@ _logger = logging.getLogger("prisma.observability")
 # Preço estimado por 1M de tokens (USD) — só pra dar ordem de grandeza de
 # custo, não é cobrança real. Local/mock são de graça (rodam na própria máquina).
 _PRECO_POR_1M_TOKENS_USD = {
-    "groq": {"entrada": 0.59, "saida": 0.79},   # ordem de grandeza do llama-3.3-70b
+    "groq": {"entrada": 0.59, "saida": 0.79},   # ordem de grandeza; conferir a tabela vigente do PRISMA_GROQ_MODEL
     "ollama": {"entrada": 0.0, "saida": 0.0},   # local, sem custo de API
     "mock": {"entrada": 0.0, "saida": 0.0},
     "demo": {"entrada": 0.0, "saida": 0.0},

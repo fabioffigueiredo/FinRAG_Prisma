@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Zap, Quote } from "lucide-react";
 import { gerarNarrativa, NARRATIVA_FALLBACK, type NarrativaResp } from "@/lib/api";
 import { useBackend, BACKENDS } from "@/components/app/backend-context";
@@ -15,24 +15,29 @@ import {
 export function NarrativeCard() {
   const { backend } = useBackend();
   const { codigo } = useFund();
-  const [data, setData] = useState<NarrativaResp | null>(
-    codigo === "ALFA-33" ? NARRATIVA_FALLBACK : null,
-  );
+  // A narrativa gerada pertence ao fundo em que foi pedida; trocar de fundo
+  // volta ao exemplo (ALFA-33) ou ao vazio, sem setState dentro de effect.
+  const [gerada, setGerada] = useState<{ codigo: string; data: NarrativaResp } | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setData(codigo === "ALFA-33" ? NARRATIVA_FALLBACK : null);
-  }, [codigo]);
+  const data: NarrativaResp | null =
+    gerada?.codigo === codigo ? gerada.data : codigo === "ALFA-33" ? NARRATIVA_FALLBACK : null;
 
   async function gerar() {
     setLoading(true);
     const r = await gerarNarrativa(backend, codigo);
-    setData(r);
+    setGerada({ codigo, data: r });
     setLoading(false);
   }
 
   const label = BACKENDS.find((b) => b.id === backend)?.label ?? backend;
-  const aoVivo = !!data && !data.fallback && data.backend !== "seed";
+  const aoVivo = !!data && !data.fallback && !data.degradado && data.backend !== "seed";
+  const selo = data?.erro
+    ? "não gerada"
+    : data?.degradado
+      ? "demonstração · IA indisponível"
+      : aoVivo
+        ? `gerado ao vivo · ${label}`
+        : "narrativa · exemplo";
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-primary/25 bg-card p-5">
@@ -42,7 +47,7 @@ export function NarrativeCard() {
           <Quote className="h-4 w-4 text-primary" strokeWidth={1.75} />
           <h2 className="text-sm font-semibold text-foreground">O que aconteceu</h2>
           <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-            {aoVivo ? `gerado ao vivo · ${label}` : "narrativa · exemplo"}
+            {selo}
           </span>
         </div>
         <button
@@ -62,6 +67,8 @@ export function NarrativeCard() {
           <Skeleton className="h-4 w-[97%]" />
           <Skeleton className="h-4 w-3/4" />
         </div>
+      ) : data?.erro ? (
+        <p className="text-sm text-[var(--destructive)]" role="alert">{data.erro}</p>
       ) : !data ? (
         <p className="text-sm text-muted-foreground">
           Sem narrativa para este fundo ainda — clique em <span className="text-primary">Gerar ao vivo</span>.

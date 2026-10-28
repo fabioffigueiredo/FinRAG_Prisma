@@ -8,6 +8,7 @@ nunca é persistido nem devolvido pela API.
 from __future__ import annotations
 
 import hashlib
+import re
 import json
 import os
 from datetime import UTC, datetime, timedelta
@@ -29,7 +30,7 @@ RELEVANCE_TERMS = {
     "debênture", "debenture", "ações", "acoes", "bolsa", "ibovespa", "equity",
     "stocks", "stock market", "câmbio", "cambio", "dólar", "dolar", "fx",
     "commodities", "petróleo", "petroleo", "oil", "brent", "mercado financeiro",
-    "financial market", "fundos", "funds", "economia", "economy", "gdp",
+    "financial market", "fundos", "funds", "economia", "economy", "economic", "gdp",
 }
 
 
@@ -101,9 +102,18 @@ def _parse_datetime(value: str | None) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+# O termo precisa COMEÇAR uma palavra e pode ter até 3 letras de flexão
+# (bolsa→bolsas, dólar→dólares, yield→yields). Decidi trocar a busca por
+# substring porque notei no feed real que "ações" casava com "eleições",
+# "fed" com "federal" e "câmbio" com "intercâmbio".
+_RELEVANCE_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(t) for t in sorted(RELEVANCE_TERMS, key=len, reverse=True)) + r")\w{0,3}\b"
+)
+
+
 def _is_relevant(text: str) -> bool:
     normalized = " ".join((text or "").lower().split())
-    return any(term in normalized for term in RELEVANCE_TERMS)
+    return _RELEVANCE_RE.search(normalized) is not None
 
 
 def _fingerprint(entry: dict[str, Any]) -> str:
@@ -120,7 +130,8 @@ def _groq_tiebreak(text: str) -> tuple[str, str] | None:
     """
     if not os.environ.get("GROQ_API_KEY"):
         return None
-    from llm import get_backend
+    from finrag.models import GroqClient
+    from llm import groq_model_leve
 
     prompt = (
         "Classifique o sentimento de uma manchete financeira pública. "
@@ -128,7 +139,7 @@ def _groq_tiebreak(text: str) -> tuple[str, str] | None:
         "Não faça recomendação e não explique.\n\nManchete: " + text[:900]
     )
     try:
-        raw = get_backend("groq").generate(prompt, temperature=0, max_tokens=24)
+        raw = GroqClient(model=groq_model_leve()).generate(prompt, temperature=0, max_tokens=24)
         parsed = json.loads(raw)
         sentiment = parsed.get("sentimento")
         if sentiment in {"positivo", "negativo", "neutro"}:

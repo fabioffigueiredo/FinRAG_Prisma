@@ -8,6 +8,7 @@ import { getRadar, type RadarResp } from "@/lib/api";
 import { useFund } from "@/components/app/fund-context";
 import { SectionTitle } from "@/components/app/kpi";
 import { easeOutQuint } from "@/lib/motion";
+import { haQuanto, useFeedRadar } from "@/components/app/use-feed-radar";
 
 export function RadarCard() {
   const { codigo } = useFund();
@@ -17,7 +18,36 @@ export function RadarCard() {
     getRadar().then(setRadar);
   }, []);
 
-  if (!radar?.ok || !Object.keys(radar.agregado).length) return null;
+  const feed = useFeedRadar();
+
+  if (!radar?.ok || !Object.keys(radar.agregado).length) {
+    // Sem sinal validado: mostra as manchetes recentes, rotuladas como tal,
+    // em vez de o card sumir do cockpit.
+    if (!feed?.ok) return null;
+    return (
+      <div className="card-surface p-5">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RadarIcon className="h-4 w-4 text-primary" strokeWidth={1.75} />
+            <SectionTitle hint="manchetes públicas, sem classificação de sentimento">Radar de Mercado</SectionTitle>
+          </div>
+          <Link href="/radar" className="flex items-center gap-1 text-[11px] text-primary/90 hover:text-primary">
+            Ver todas <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+          </Link>
+        </div>
+        <ul className="space-y-2">
+          {feed.itens.slice(0, 5).map((m) => (
+            <li key={m.id} className="text-[13px] leading-snug">
+              <a href={m.link} target="_blank" rel="noreferrer" className="text-foreground hover:underline">
+                {m.titulo}
+              </a>
+              <span className="ml-1 text-[11px] text-muted-foreground">· {m.portal} · {haQuanto(m.publicada_em)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
 
   const linhas = Object.entries(radar.agregado).sort((a, b) => b[1].liquido - a[1].liquido);
 

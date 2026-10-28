@@ -326,7 +326,7 @@ function PrismaMessage({
 }) {
   const bloqueado = data.bloqueados.length > 0;
   const degradado = data.degradado === true;
-  const { shown, done } = useTypewriter(data.resposta, onGrow);
+  const { shown, done } = useTypewriter(data.erro ?? data.resposta, onGrow);
 
   return (
     <motion.div
@@ -404,7 +404,12 @@ function PrismaMessage({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: easeOutQuint, delay: 0.1 }}
           >
-            {data.escopo ? (
+            {data.erro ? (
+              <div className="flex items-center gap-2 rounded-lg border border-[var(--destructive)]/40 bg-[var(--destructive)]/10 px-3 py-1.5 text-xs text-[var(--destructive)]">
+                <ShieldAlert className="h-4 w-4" strokeWidth={1.75} />
+                A consulta não foi respondida — nenhuma análise foi gerada.
+              </div>
+            ) : data.escopo ? (
               <div className="flex items-center gap-2 rounded-lg border border-[var(--chart-5)]/40 bg-[var(--chart-5)]/10 px-3 py-1.5 text-xs text-[var(--chart-5)]">
                 <ShieldCheck className="h-4 w-4" strokeWidth={1.75} />
                 Pergunta fora de escopo: o Prisma explica resultados, não recomenda investimentos.
